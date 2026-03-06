@@ -14,10 +14,11 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Copy source code and README (required by hatchling build)
 COPY README.md ./
 COPY src/ src/
+COPY alembic.ini entrypoint.sh ./
 
 # Install the project itself
 RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
 
-CMD ["uv", "run", "uvicorn", "agentgate.server.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./entrypoint.sh"]

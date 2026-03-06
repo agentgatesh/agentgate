@@ -1,0 +1,8 @@
+name: my-first-agent
+description: A demo agent that echoes back messages.
+url: https://example.com/agent
+version: "1.0.0"
+skills:
+  - id: echo
+    name: Echo
+    description: Echoes back the input message
