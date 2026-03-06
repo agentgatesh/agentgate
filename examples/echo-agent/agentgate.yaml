@@ -1,6 +1,6 @@
 name: echo-agent
 description: A minimal demo agent that echoes back messages. Perfect for testing A2A communication.
-url: http://localhost:9000
+url: https://agentgate.sh/echo
 version: "1.0.0"
 skills:
   - id: echo
