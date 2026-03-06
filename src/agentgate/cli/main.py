@@ -32,10 +32,33 @@ def status(server: str):
         click.echo(f"Server: {server} (unreachable)")
 
 
+@cli.command(name="list")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+def list_agents(server: str):
+    """List all deployed agents."""
+    try:
+        r = httpx.get(f"{server}/agents/", timeout=5)
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+
+    agents = r.json()
+    if not agents:
+        click.echo("No agents deployed yet.")
+        return
+
+    click.echo(f"{'NAME':<25} {'VERSION':<10} {'ID'}")
+    click.echo("-" * 70)
+    for a in agents:
+        click.echo(f"{a['name']:<25} {a['version']:<10} {a['id']}")
+    click.echo(f"\n{len(agents)} agent(s) total.")
+
+
 @cli.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False, resolve_path=True))
 @click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
-def deploy(path: str, server: str):
+@click.option("--api-key", envvar="AGENTGATE_API_KEY", required=True, help="API key for authentication (or set AGENTGATE_API_KEY).")
+def deploy(path: str, server: str, api_key: str):
     """Deploy an agent from a local directory.
 
     PATH is the directory containing your agent and an agentgate.yaml config file.
@@ -68,7 +91,12 @@ def deploy(path: str, server: str):
     click.echo(f"Deploying agent '{payload['name']}' to {server}...")
 
     try:
-        r = httpx.post(f"{server}/agents/", json=payload, timeout=10)
+        r = httpx.post(
+            f"{server}/agents/",
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
     except httpx.ConnectError:
         click.echo(f"Error: cannot reach server at {server}", err=True)
         raise SystemExit(1)

@@ -25,6 +25,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://agentgate:${DB_PASSWORD:-changeme}@db:5432/agentgate
       SECRET_KEY: ${SECRET_KEY:-changeme}
+      API_KEY: ${API_KEY}
     ports:
       - "127.0.0.1:8000:8000"
 

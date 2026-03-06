@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     port: int = 8000
     debug: bool = False
     secret_key: str = "changeme"
+    api_key: str = ""
 
 
 settings = Settings()
