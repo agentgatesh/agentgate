@@ -20,7 +20,10 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-@router.post("/", response_model=AgentResponse, status_code=201, dependencies=[Depends(verify_api_key)])
+@router.post(
+    "/", response_model=AgentResponse, status_code=201,
+    dependencies=[Depends(verify_api_key)],
+)
 async def register_agent(data: AgentCreate):
     async with async_session() as session:
         agent = Agent(
@@ -50,6 +53,16 @@ async def get_agent(agent_id: uuid.UUID):
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
         return agent
+
+
+@router.delete("/{agent_id}", status_code=204, dependencies=[Depends(verify_api_key)])
+async def delete_agent(agent_id: uuid.UUID):
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        await session.delete(agent)
+        await session.commit()
 
 
 @router.get("/{agent_id}/card", response_model=AgentCard)

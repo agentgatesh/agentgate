@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 import click
@@ -55,9 +54,41 @@ def list_agents(server: str):
 
 
 @cli.command()
+@click.argument("agent_id")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
+def delete(agent_id: str, server: str, api_key: str):
+    """Delete a deployed agent by ID."""
+    try:
+        r = httpx.delete(
+            f"{server}/agents/{agent_id}",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+
+    if r.status_code == 204:
+        click.echo(f"Agent {agent_id} deleted successfully.")
+    elif r.status_code == 404:
+        click.echo(f"Error: agent {agent_id} not found.", err=True)
+        raise SystemExit(1)
+    else:
+        click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+        raise SystemExit(1)
+
+
+@cli.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False, resolve_path=True))
 @click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
-@click.option("--api-key", envvar="AGENTGATE_API_KEY", required=True, help="API key for authentication (or set AGENTGATE_API_KEY).")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
 def deploy(path: str, server: str, api_key: str):
     """Deploy an agent from a local directory.
 
