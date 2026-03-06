@@ -26,7 +26,7 @@ jobs:
         run: uv sync --dev
 
       - name: Lint
-        run: uv run ruff check src/ tests/
+        run: uv run --dev ruff check src/ tests/
 
       - name: Test
-        run: uv run pytest -v
+        run: uv run --dev pytest -v
