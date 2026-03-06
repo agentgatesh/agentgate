@@ -29,5 +29,11 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
+  echo-agent:
+    build: examples/echo-agent
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"
+
 volumes:
   pgdata:
