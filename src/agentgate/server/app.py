@@ -1,7 +1,12 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
 from agentgate import __version__
+
+STATIC_DIR = Path(__file__).parent / "static"
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
 from agentgate.server.routes import router as agents_router
@@ -13,6 +18,11 @@ app = FastAPI(
 )
 
 app.include_router(agents_router)
+
+
+@app.get("/", response_class=HTMLResponse)
+async def landing_page():
+    return (STATIC_DIR / "index.html").read_text()
 
 
 @app.get("/health")
