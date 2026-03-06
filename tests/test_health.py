@@ -346,6 +346,121 @@ def test_route_task_agent_timeout():
 
 
 # ---------------------------------------------------------------------------
+# POST /agents/{id}/task — metrics recording
+# ---------------------------------------------------------------------------
+
+
+def test_route_task_records_metrics():
+    import uuid
+
+    from agentgate.server import metrics
+    metrics.reset()
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, name="metrics-agent", url="http://m:9000")
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    a2a_response = {
+        "id": "task-1",
+        "status": {"state": "completed"},
+        "artifacts": [{"parts": [{"type": "text", "text": "ok"}]}],
+    }
+
+    mock_httpx_response = MagicMock()
+    mock_httpx_response.status_code = 200
+    mock_httpx_response.json.return_value = a2a_response
+
+    with patch("agentgate.server.routes.async_session", mock_factory), \
+         patch("agentgate.server.routes.httpx.AsyncClient") as mock_client_cls:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.post.return_value = mock_httpx_response
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client_instance
+
+        client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "task-1", "message": {"parts": [{"type": "text", "text": "Hi"}]}},
+        )
+
+    m = metrics.get_metrics()
+    assert m["total_requests"] >= 1
+    assert "metrics-agent" in m["agents"]
+    assert m["agents"]["metrics-agent"]["requests"] >= 1
+    assert m["agents"]["metrics-agent"]["avg_latency_ms"] >= 0
+    metrics.reset()
+
+
+# ---------------------------------------------------------------------------
+# GET /metrics — metrics endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_metrics_endpoint():
+    from agentgate.server import metrics
+    metrics.reset()
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_requests" in data
+    assert "total_errors" in data
+    assert "agents" in data
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting — POST /agents/{id}/task
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limiter_unit():
+    from agentgate.server.ratelimit import RateLimiter
+
+    limiter = RateLimiter(rate=2.0, burst=3)
+    assert limiter.allow("ip1") is True
+    assert limiter.allow("ip1") is True
+    assert limiter.allow("ip1") is True
+    assert limiter.allow("ip1") is False
+    # Different key should still be allowed
+    assert limiter.allow("ip2") is True
+
+
+def test_route_task_rate_limited():
+    import uuid
+
+    from agentgate.server import ratelimit
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, url="http://rl:9000")
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    # Replace the global limiter with a very strict one (burst=1)
+    original = ratelimit.task_limiter
+    ratelimit.task_limiter = ratelimit.RateLimiter(rate=0.0, burst=1)
+
+    try:
+        with patch("agentgate.server.routes.task_limiter", ratelimit.task_limiter), \
+             patch("agentgate.server.routes.async_session", mock_factory), \
+             patch("agentgate.server.routes.httpx.AsyncClient") as mock_cls:
+            mock_inst = AsyncMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {"id": "t", "status": {"state": "completed"}}
+            mock_inst.post.return_value = mock_resp
+            mock_inst.__aenter__ = AsyncMock(return_value=mock_inst)
+            mock_inst.__aexit__ = AsyncMock(return_value=False)
+            mock_cls.return_value = mock_inst
+
+            payload = {"id": "t", "message": {"parts": [{"type": "text", "text": "x"}]}}
+            r1 = client.post(f"/agents/{agent_id}/task", json=payload)
+            assert r1.status_code == 200
+
+            r2 = client.post(f"/agents/{agent_id}/task", json=payload)
+            assert r2.status_code == 429
+    finally:
+        ratelimit.task_limiter = original
+
+
+# ---------------------------------------------------------------------------
 # GET /agents/{id}/card — Agent Card
 # ---------------------------------------------------------------------------
 

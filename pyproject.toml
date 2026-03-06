@@ -1,5 +1,5 @@
 [project]
-name = "agentgate"
+name = "agentgatesh"
 version = "0.1.0"
 description = "The unified gateway to deploy, connect, and monetize AI agents via MCP + A2A + UCP."
 readme = "README.md"

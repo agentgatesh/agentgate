@@ -3,6 +3,7 @@
 The unified gateway to deploy, connect, and monetize AI agents via MCP + A2A + UCP.
 
 [![CI](https://github.com/agentgatesh/agentgate/actions/workflows/ci.yml/badge.svg)](https://github.com/agentgatesh/agentgate/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/agentgatesh)](https://pypi.org/project/agentgatesh/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green)](LICENSE)
 
@@ -19,7 +20,7 @@ AgentGate is an open-source gateway that makes it easy to deploy, discover, and 
 ### 1. Install
 
 ```bash
-pip install agentgate
+pip install agentgatesh
 ```
 
 ### 2. Create your agent config
@@ -112,7 +113,8 @@ with AgentGateClient("https://agentgate.sh") as c:
 | `POST` | `/agents/` | Yes | Register a new agent |
 | `PUT` | `/agents/{id}` | Yes | Update an agent |
 | `DELETE` | `/agents/{id}` | Yes | Delete an agent |
-| `POST` | `/agents/{id}/task` | No | Route A2A task to agent |
+| `POST` | `/agents/{id}/task` | No | Route A2A task to agent (rate limited) |
+| `GET` | `/metrics` | No | Task routing metrics |
 
 ## Development
 

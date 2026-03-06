@@ -1,14 +1,19 @@
+import logging
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.metrics import Timer, record_request
+from agentgate.server.ratelimit import task_limiter
 from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse, AgentUpdate
+
+logger = logging.getLogger("agentgate.routing")
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 bearer_scheme = HTTPBearer()
@@ -98,33 +103,54 @@ async def get_agent_card(agent_id: uuid.UUID):
 
 
 @router.post("/{agent_id}/task")
-async def route_task(agent_id: uuid.UUID, task: dict):
+async def route_task(agent_id: uuid.UUID, task: dict, request: Request):
     """Route an A2A task to the target agent (proxy).
 
     Looks up the agent's URL in the registry and forwards the task payload
     to {agent_url}/a2a. Returns the agent's response directly.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    if not task_limiter.allow(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
 
+    agent_name = agent.name
     target_url = f"{agent.url.rstrip('/')}/a2a"
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        try:
-            resp = await client.post(target_url, json=task)
-        except httpx.ConnectError:
-            raise HTTPException(
-                status_code=502, detail=f"Cannot reach agent at {agent.url}",
-            )
-        except httpx.TimeoutException:
-            raise HTTPException(
-                status_code=504, detail=f"Agent at {agent.url} timed out",
-            )
+    logger.info("Routing task to %s (%s)", agent_name, target_url)
+
+    with Timer() as t:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                resp = await client.post(target_url, json=task)
+            except httpx.ConnectError:
+                record_request(agent_name, t.elapsed_ms, error_type="connect_error")
+                logger.error("Cannot reach %s at %s", agent_name, agent.url)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Cannot reach agent at {agent.url}",
+                )
+            except httpx.TimeoutException:
+                record_request(agent_name, t.elapsed_ms, error_type="timeout")
+                logger.error("Timeout reaching %s at %s", agent_name, agent.url)
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Agent at {agent.url} timed out",
+                )
 
     if resp.status_code >= 400:
+        record_request(agent_name, t.elapsed_ms, error_type=f"http_{resp.status_code}")
+        logger.warning(
+            "Agent %s returned %d in %.0fms", agent_name, resp.status_code, t.elapsed_ms,
+        )
         raise HTTPException(
             status_code=resp.status_code,
             detail=f"Agent returned error: {resp.text}",
         )
+
+    record_request(agent_name, t.elapsed_ms)
+    logger.info("Task routed to %s — %d in %.0fms", agent_name, resp.status_code, t.elapsed_ms)
     return resp.json()
