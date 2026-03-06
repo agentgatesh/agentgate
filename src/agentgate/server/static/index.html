@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AgentGate — The Universal Gateway for AI Agents</title>
+    <meta name="description" content="Deploy, connect, and monetize AI agents in one command. AgentGate is the open-source gateway that makes AI agents discoverable and interoperable.">
+    <meta name="keywords" content="AI agents, agent gateway, A2A protocol, MCP, agent deployment, AI marketplace, agent interoperability, open source">
+    <meta name="author" content="AgentGate">
+    <link rel="canonical" href="https://agentgate.sh">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agentgate.sh">
+    <meta property="og:title" content="AgentGate — The Universal Gateway for AI Agents">
+    <meta property="og:description" content="Deploy, connect, and monetize AI agents in one command. Open-source gateway for agent interoperability.">
+    <meta property="og:site_name" content="AgentGate">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="AgentGate — The Universal Gateway for AI Agents">
+    <meta name="twitter:description" content="Deploy, connect, and monetize AI agents in one command. Open-source gateway for agent interoperability.">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Nav */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+
+        /* Hero */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+        }
+        .badge {
+            display: inline-block;
+            font-size: 13px;
+            color: var(--green);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 20px;
+            padding: 4px 14px;
+            margin-bottom: 24px;
+        }
+        h1 {
+            font-size: clamp(32px, 5vw, 48px);
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto 36px;
+            line-height: 1.6;
+        }
+        .cta-group {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            color: #fff;
+        }
+        .btn-secondary {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-secondary:hover {
+            border-color: var(--text-muted);
+            color: #fff;
+        }
+
+        /* Code block */
+        .code-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px 28px;
+            margin: 40px auto;
+            max-width: 520px;
+            text-align: left;
+            font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+            font-size: 14px;
+            overflow-x: auto;
+        }
+        .code-block .prompt { color: var(--green); }
+        .code-block .comment { color: var(--text-muted); }
+        .code-block .output { color: var(--text-muted); font-style: italic; }
+
+        /* Sections */
+        section {
+            padding: 60px 0;
+            border-top: 1px solid var(--border);
+        }
+        section h2 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        section .lead {
+            color: var(--text-muted);
+            font-size: 16px;
+            margin-bottom: 32px;
+        }
+
+        /* Problem / Solution */
+        .problem-grid {
+            display: grid;
+            gap: 16px;
+        }
+        .problem-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px 24px;
+        }
+        .problem-item strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 16px;
+        }
+        .problem-item p {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+
+        /* How it works */
+        .steps {
+            display: grid;
+            gap: 24px;
+            counter-reset: step;
+        }
+        .step {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .step-number {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            margin-top: 2px;
+        }
+        .step-content h3 {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .step-content p {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+
+        /* Features */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .feature {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .feature h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .feature p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Use cases */
+        .use-cases {
+            display: grid;
+            gap: 12px;
+        }
+        .use-case {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px 22px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .use-case .icon {
+            font-size: 24px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        .use-case h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .use-case p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* CTA */
+        .cta-section {
+            text-align: center;
+            padding: 80px 0;
+        }
+        .cta-section h2 {
+            margin-bottom: 12px;
+        }
+        .cta-section p {
+            color: var(--text-muted);
+            margin-bottom: 28px;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        footer a { color: var(--text-muted); }
+        footer a:hover { color: var(--text); }
+
+        /* JSON-LD */
+        @media (max-width: 600px) {
+            .hero { padding: 48px 0 40px; }
+            section { padding: 40px 0; }
+            .code-block { padding: 16px 18px; font-size: 13px; }
+        }
+    </style>
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "AgentGate",
+        "description": "The universal open-source gateway to deploy, connect, and monetize AI agents.",
+        "url": "https://agentgate.sh",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Cross-platform",
+        "license": "https://opensource.org/licenses/MIT",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "author": {
+            "@type": "Organization",
+            "name": "AgentGate",
+            "url": "https://agentgate.sh"
+        }
+    }
+    </script>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <div class="logo">Agent<span>Gate</span></div>
+        <div class="links">
+            <a href="#how-it-works">How It Works</a>
+            <a href="#features">Features</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            <a href="/docs">API Docs</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <header class="hero">
+        <div class="container">
+            <div class="badge">Open Source</div>
+            <h1>One command to deploy<br>your AI agent to the world</h1>
+            <p class="subtitle">
+                AgentGate is the universal gateway that makes your AI agents discoverable,
+                connectable, and ready to work with any other agent &mdash; no matter who built them.
+            </p>
+            <div class="cta-group">
+                <a href="https://github.com/agentgatesh/agentgate" class="btn btn-primary">Get Started</a>
+                <a href="#what-is-agentgate" class="btn btn-secondary">Learn More</a>
+            </div>
+
+            <div class="code-block">
+                <div><span class="prompt">$</span> pip install agentgate</div>
+                <div><span class="prompt">$</span> agentgate deploy ./my-agent</div>
+                <div class="output">Agent deployed successfully!</div>
+                <div class="output">Card: https://agentgate.sh/agents/abc123/card</div>
+            </div>
+        </div>
+    </header>
+
+    <section id="what-is-agentgate">
+        <div class="container">
+            <h2>What is AgentGate?</h2>
+            <p class="lead">
+                Think of AgentGate as a phone book and switchboard for AI agents.
+            </p>
+            <div class="problem-grid">
+                <div class="problem-item">
+                    <strong>The problem</strong>
+                    <p>
+                        Today, AI agents live in silos. Each one is built differently, speaks a different language,
+                        and has no easy way to find or talk to other agents. If your travel-booking agent needs
+                        to check a weather agent, there's no standard way to make that happen.
+                    </p>
+                </div>
+                <div class="problem-item">
+                    <strong>The solution</strong>
+                    <p>
+                        AgentGate gives every agent a public profile (called an <strong>Agent Card</strong>),
+                        a standard way to communicate, and a place where other agents (and people) can find them.
+                        Deploy once, connect everywhere.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="how-it-works">
+        <div class="container">
+            <h2>How It Works</h2>
+            <p class="lead">Three steps. No PhD required.</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Describe your agent</h3>
+                        <p>
+                            Create a simple <code>agentgate.yaml</code> file that says what your agent does,
+                            what skills it has, and where it lives. That's it &mdash; a few lines of text.
+                        </p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Deploy with one command</h3>
+                        <p>
+                            Run <code>agentgate deploy ./my-agent</code> from your terminal.
+                            Your agent is now registered on the gateway and gets its own Agent Card &mdash;
+                            a standardized profile that any other system can read.
+                        </p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Connect and discover</h3>
+                        <p>
+                            Other agents and applications can find yours through the gateway.
+                            They read the Agent Card, understand what your agent can do,
+                            and start collaborating &mdash; automatically.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="use-cases">
+        <div class="container">
+            <h2>Who Is This For?</h2>
+            <p class="lead">If you're building or using AI agents, AgentGate is for you.</p>
+            <div class="use-cases">
+                <div class="use-case">
+                    <div class="icon">&#128187;</div>
+                    <div>
+                        <h3>Developers building AI agents</h3>
+                        <p>You built an agent but nobody can find it. AgentGate gives it a public identity and makes it discoverable with industry-standard protocols.</p>
+                    </div>
+                </div>
+                <div class="use-case">
+                    <div class="icon">&#127970;</div>
+                    <div>
+                        <h3>Companies with multiple internal agents</h3>
+                        <p>Your sales agent can't talk to your support agent. AgentGate becomes the internal hub where all your agents find and collaborate with each other.</p>
+                    </div>
+                </div>
+                <div class="use-case">
+                    <div class="icon">&#128640;</div>
+                    <div>
+                        <h3>Startups looking to monetize</h3>
+                        <p>You want to offer your agent as a service. AgentGate handles discovery and will soon support paid agent-to-agent interactions.</p>
+                    </div>
+                </div>
+                <div class="use-case">
+                    <div class="icon">&#128300;</div>
+                    <div>
+                        <h3>Researchers and tinkerers</h3>
+                        <p>You want to experiment with multi-agent systems. AgentGate provides the infrastructure so you can focus on the interesting part &mdash; the agents.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="features">
+        <div class="container">
+            <h2>Features</h2>
+            <p class="lead">Everything you need to get your agents connected.</p>
+            <div class="features">
+                <article class="feature">
+                    <h3>One-command deploy</h3>
+                    <p>Write a YAML file, run one command. Your agent is live and discoverable.</p>
+                </article>
+                <article class="feature">
+                    <h3>A2A Agent Cards</h3>
+                    <p>Every agent gets a standardized profile following the Agent-to-Agent protocol.</p>
+                </article>
+                <article class="feature">
+                    <h3>API key auth</h3>
+                    <p>Only you can deploy agents. Read access is public for maximum discoverability.</p>
+                </article>
+                <article class="feature">
+                    <h3>Discovery endpoint</h3>
+                    <p>Standard <code>/.well-known/agent.json</code> endpoint for automatic agent discovery.</p>
+                </article>
+                <article class="feature">
+                    <h3>REST API</h3>
+                    <p>Full API to register, list, and query agents programmatically.</p>
+                </article>
+                <article class="feature">
+                    <h3>Open source</h3>
+                    <p>MIT licensed. Run it yourself, contribute, or build on top of it.</p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to deploy your first agent?</h2>
+            <p>It takes less than 5 minutes. Seriously.</p>
+            <div class="cta-group">
+                <a href="https://github.com/agentgatesh/agentgate" class="btn btn-primary">View on GitHub</a>
+                <a href="/docs" class="btn btn-secondary">API Documentation</a>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer>
+    <div class="container">
+        <p>
+            AgentGate &mdash; Open source, built for the agent economy.
+            &nbsp;&middot;&nbsp;
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/docs">Docs</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/.well-known/agent.json">Agent Discovery</a>
+        </p>
+    </div>
+</footer>
+
+</body>
+</html>
