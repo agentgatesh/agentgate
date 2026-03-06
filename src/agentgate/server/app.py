@@ -5,11 +5,11 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
 from agentgate import __version__
-
-STATIC_DIR = Path(__file__).parent / "static"
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
 from agentgate.server.routes import router as agents_router
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(
     title="AgentGate",

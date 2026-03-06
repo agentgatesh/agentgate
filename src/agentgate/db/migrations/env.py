@@ -1,13 +1,13 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
 from agentgate.core.config import settings
-from agentgate.db.base import Base
 from agentgate.db import models  # noqa: F401 — registers models with Base.metadata
+from agentgate.db.base import Base
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

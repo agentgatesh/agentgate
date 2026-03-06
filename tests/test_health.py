@@ -156,6 +156,48 @@ def test_get_agent_not_found():
 
 
 # ---------------------------------------------------------------------------
+# DELETE /agents/{id} — requires auth
+# ---------------------------------------------------------------------------
+
+
+def test_delete_agent_no_auth():
+    import uuid
+
+    response = client.delete(f"/agents/{uuid.uuid4()}")
+    assert response.status_code == 401
+
+
+def test_delete_agent_success():
+    import uuid
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id)
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory), \
+         patch("agentgate.server.routes.settings") as mock_settings:
+        mock_settings.api_key = "test-key"
+        response = client.delete(
+            f"/agents/{agent_id}",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 204
+
+
+def test_delete_agent_not_found():
+    import uuid
+
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.settings") as mock_settings, \
+         patch("agentgate.server.routes.async_session", mock_factory):
+        mock_settings.api_key = "test-key"
+        response = client.delete(
+            f"/agents/{uuid.uuid4()}",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # GET /agents/{id}/card — Agent Card
 # ---------------------------------------------------------------------------
 
@@ -202,6 +244,7 @@ def test_well_known_agent_json():
 
 def test_agent_create_requires_name():
     from pydantic import ValidationError
+
     from agentgate.server.schemas import AgentCreate
 
     with pytest.raises(ValidationError):
@@ -210,6 +253,7 @@ def test_agent_create_requires_name():
 
 def test_agent_create_requires_url():
     from pydantic import ValidationError
+
     from agentgate.server.schemas import AgentCreate
 
     with pytest.raises(ValidationError):
