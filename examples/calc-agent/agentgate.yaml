@@ -1,0 +1,8 @@
+name: calc-agent
+description: A simple calculator agent — evaluates basic arithmetic expressions.
+url: https://agentgate.sh/calc
+version: 1.0.0
+skills:
+  - id: calculate
+    name: Calculate
+    description: Evaluate basic math expressions (e.g. "2 + 3", "10 * 5")

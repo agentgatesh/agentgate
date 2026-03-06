@@ -1,5 +1,6 @@
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -94,3 +95,36 @@ async def get_agent_card(agent_id: uuid.UUID):
             version=agent.version,
             skills=agent.skills,
         )
+
+
+@router.post("/{agent_id}/task")
+async def route_task(agent_id: uuid.UUID, task: dict):
+    """Route an A2A task to the target agent (proxy).
+
+    Looks up the agent's URL in the registry and forwards the task payload
+    to {agent_url}/a2a. Returns the agent's response directly.
+    """
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+    target_url = f"{agent.url.rstrip('/')}/a2a"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            resp = await client.post(target_url, json=task)
+        except httpx.ConnectError:
+            raise HTTPException(
+                status_code=502, detail=f"Cannot reach agent at {agent.url}",
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(
+                status_code=504, detail=f"Agent at {agent.url} timed out",
+            )
+
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=resp.status_code,
+            detail=f"Agent returned error: {resp.text}",
+        )
+    return resp.json()

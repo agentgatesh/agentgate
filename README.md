@@ -61,9 +61,43 @@ agentgate status
 | `agentgate status` | Show server status |
 | `agentgate list` | List all deployed agents |
 | `agentgate deploy ./path` | Deploy an agent from a directory |
+| `agentgate update <agent-id>` | Update an agent (--name, --version, etc.) |
 | `agentgate delete <agent-id>` | Delete a deployed agent |
 
 All commands that modify data require `--api-key` or the `AGENTGATE_API_KEY` environment variable.
+
+## Python SDK
+
+```python
+from agentgate.sdk import AgentGateClient
+
+# Connect to AgentGate
+client = AgentGateClient("https://agentgate.sh", api_key="your-key")
+
+# List agents
+agents = client.list_agents()
+
+# Register a new agent
+agent = client.register_agent(
+    name="my-agent",
+    url="https://my-agent.example.com",
+    description="A helpful agent",
+)
+
+# Send a task to an agent (A2A routing via AgentGate)
+result = client.send_task(agent["id"], "Hello, agent!")
+print(result["artifacts"][0]["parts"][0]["text"])
+
+# Update an agent
+client.update_agent(agent["id"], version="2.0.0")
+
+# Delete an agent
+client.delete_agent(agent["id"])
+
+# Context manager for automatic cleanup
+with AgentGateClient("https://agentgate.sh") as c:
+    print(c.health())
+```
 
 ## API Endpoints
 
@@ -76,7 +110,9 @@ All commands that modify data require `--api-key` or the `AGENTGATE_API_KEY` env
 | `GET` | `/agents/{id}` | No | Get agent details |
 | `GET` | `/agents/{id}/card` | No | Get A2A Agent Card |
 | `POST` | `/agents/` | Yes | Register a new agent |
+| `PUT` | `/agents/{id}` | Yes | Update an agent |
 | `DELETE` | `/agents/{id}` | Yes | Delete an agent |
+| `POST` | `/agents/{id}/task` | No | Route A2A task to agent |
 
 ## Development
 
