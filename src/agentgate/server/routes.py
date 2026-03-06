@@ -7,7 +7,7 @@ from sqlalchemy import select
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
-from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse
+from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse, AgentUpdate
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 bearer_scheme = HTTPBearer()
@@ -52,6 +52,22 @@ async def get_agent(agent_id: uuid.UUID):
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+        return agent
+
+
+@router.put(
+    "/{agent_id}", response_model=AgentResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+async def update_agent(agent_id: uuid.UUID, data: AgentUpdate):
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        for field, value in data.model_dump(exclude_none=True).items():
+            setattr(agent, field, value)
+        await session.commit()
+        await session.refresh(agent)
         return agent
 
 

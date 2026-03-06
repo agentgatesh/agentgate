@@ -12,6 +12,14 @@ class AgentCreate(BaseModel):
     skills: list[dict] = []
 
 
+class AgentUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    url: str | None = None
+    version: str | None = None
+    skills: list[dict] | None = None
+
+
 class AgentResponse(BaseModel):
     id: uuid.UUID
     name: str
