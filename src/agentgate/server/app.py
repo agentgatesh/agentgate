@@ -7,6 +7,7 @@ from sqlalchemy import select
 from agentgate import __version__
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.metrics import get_metrics
 from agentgate.server.routes import router as agents_router
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -28,6 +29,11 @@ async def landing_page():
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": __version__}
+
+
+@app.get("/metrics")
+async def metrics():
+    return get_metrics()
 
 
 @app.get("/.well-known/agent.json")
