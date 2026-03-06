@@ -102,11 +102,11 @@ class AgentGateClient:
 
     # --- A2A communication ---
 
-    def send_task(self, agent_url: str, text: str, task_id: str = "task-1") -> dict:
-        """Send an A2A task to an agent.
+    def send_task(self, agent_id: str, text: str, task_id: str = "task-1") -> dict:
+        """Send an A2A task to an agent via AgentGate routing.
 
         Args:
-            agent_url: The full URL of the agent (e.g. https://agentgate.sh/echo)
+            agent_id: The agent ID (UUID) registered on AgentGate
             text: The text message to send
             task_id: Optional task identifier
         """
@@ -115,7 +115,7 @@ class AgentGateClient:
             "message": {"parts": [{"type": "text", "text": text}]},
         }
         r = self._client.post(
-            f"{agent_url.rstrip('/')}/a2a",
+            f"{self.server_url}/agents/{agent_id}/task",
             json=payload,
         )
         self._raise_for_status(r)

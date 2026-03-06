@@ -78,10 +78,14 @@ class TestAgentGateClient:
         client = AgentGateClient("https://example.com")
         with patch.object(client._client, "post", return_value=_mock_response(
             json_data=response_data
-        )):
-            result = client.send_task("https://agent.example.com", "Hi")
+        )) as mock_post:
+            result = client.send_task("agent-uuid-123", "Hi")
         assert result["status"]["state"] == "completed"
         assert result["artifacts"][0]["parts"][0]["text"] == "Echo: Hi"
+        # Verify it routes through AgentGate, not directly to agent URL
+        mock_post.assert_called_once()
+        call_url = mock_post.call_args[0][0]
+        assert "/agents/agent-uuid-123/task" in call_url
 
     def test_discover(self):
         discovery = {"name": "AgentGate", "agents": []}

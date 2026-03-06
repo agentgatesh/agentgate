@@ -246,6 +246,106 @@ def test_update_agent_not_found():
 
 
 # ---------------------------------------------------------------------------
+# POST /agents/{id}/task — A2A routing (proxy)
+# ---------------------------------------------------------------------------
+
+
+def test_route_task_agent_not_found():
+    import uuid
+
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.post(
+            f"/agents/{uuid.uuid4()}/task",
+            json={"id": "task-1", "message": {"parts": [{"type": "text", "text": "Hi"}]}},
+        )
+    assert response.status_code == 404
+
+
+def test_route_task_success():
+    import uuid
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, url="http://fake-agent:9000")
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    a2a_response = {
+        "id": "task-1",
+        "status": {"state": "completed"},
+        "artifacts": [{"parts": [{"type": "text", "text": "Echo: Hi"}]}],
+    }
+
+    mock_httpx_response = MagicMock()
+    mock_httpx_response.status_code = 200
+    mock_httpx_response.json.return_value = a2a_response
+
+    with patch("agentgate.server.routes.async_session", mock_factory), \
+         patch("agentgate.server.routes.httpx.AsyncClient") as mock_client_cls:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.post.return_value = mock_httpx_response
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client_instance
+
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "task-1", "message": {"parts": [{"type": "text", "text": "Hi"}]}},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"]["state"] == "completed"
+    assert data["artifacts"][0]["parts"][0]["text"] == "Echo: Hi"
+
+
+def test_route_task_agent_unreachable():
+    import uuid
+
+    import httpx as real_httpx
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, url="http://unreachable:9000")
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    with patch("agentgate.server.routes.async_session", mock_factory), \
+         patch("agentgate.server.routes.httpx.AsyncClient") as mock_client_cls:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.post.side_effect = real_httpx.ConnectError("Connection refused")
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client_instance
+
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "task-1", "message": {"parts": [{"type": "text", "text": "Hi"}]}},
+        )
+    assert response.status_code == 502
+
+
+def test_route_task_agent_timeout():
+    import uuid
+
+    import httpx as real_httpx
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, url="http://slow-agent:9000")
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    with patch("agentgate.server.routes.async_session", mock_factory), \
+         patch("agentgate.server.routes.httpx.AsyncClient") as mock_client_cls:
+        mock_client_instance = AsyncMock()
+        mock_client_instance.post.side_effect = real_httpx.TimeoutException("Timed out")
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.return_value = mock_client_instance
+
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "task-1", "message": {"parts": [{"type": "text", "text": "Hi"}]}},
+        )
+    assert response.status_code == 504
+
+
+# ---------------------------------------------------------------------------
 # GET /agents/{id}/card — Agent Card
 # ---------------------------------------------------------------------------
 

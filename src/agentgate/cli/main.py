@@ -83,6 +83,64 @@ def delete(agent_id: str, server: str, api_key: str):
 
 
 @cli.command()
+@click.argument("agent_id")
+@click.option("--name", default=None, help="New agent name.")
+@click.option("--description", default=None, help="New description.")
+@click.option("--url", default=None, help="New agent URL.")
+@click.option("--version", "agent_version", default=None, help="New version.")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
+def update(agent_id: str, name: str | None, description: str | None, url: str | None,
+           agent_version: str | None, server: str, api_key: str):
+    """Update an existing agent by ID.
+
+    Pass only the fields you want to change.
+    """
+    fields = {}
+    if name is not None:
+        fields["name"] = name
+    if description is not None:
+        fields["description"] = description
+    if url is not None:
+        fields["url"] = url
+    if agent_version is not None:
+        fields["version"] = agent_version
+
+    if not fields:
+        click.echo(
+            "Error: no fields to update. Use --name, --description, --url, or --version.",
+            err=True,
+        )
+        raise SystemExit(1)
+
+    try:
+        r = httpx.put(
+            f"{server}/agents/{agent_id}",
+            json=fields,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+
+    if r.status_code == 200:
+        agent = r.json()
+        click.echo(f"Agent {agent_id} updated successfully!")
+        click.echo(f"  Name: {agent['name']}")
+        click.echo(f"  Version: {agent['version']}")
+    elif r.status_code == 404:
+        click.echo(f"Error: agent {agent_id} not found.", err=True)
+        raise SystemExit(1)
+    else:
+        click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+        raise SystemExit(1)
+
+
+@cli.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False, resolve_path=True))
 @click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
 @click.option(
