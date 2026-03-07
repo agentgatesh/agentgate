@@ -155,6 +155,86 @@ class AsyncAgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    # --- Organization management ---
+
+    async def create_org(
+        self,
+        name: str,
+        api_key: str,
+        cost_per_invocation: float = 0.001,
+        rate_limit: float = 10.0,
+        rate_burst: int = 20,
+        billing_alert_threshold: float | None = None,
+    ) -> dict:
+        payload: dict = {
+            "name": name, "api_key": api_key,
+            "cost_per_invocation": cost_per_invocation,
+            "rate_limit": rate_limit, "rate_burst": rate_burst,
+        }
+        if billing_alert_threshold is not None:
+            payload["billing_alert_threshold"] = billing_alert_threshold
+        r = await self._client.post(
+            f"{self.server_url}/orgs/", json=payload,
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def list_orgs(self) -> list[dict]:
+        r = await self._client.get(
+            f"{self.server_url}/orgs/",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def get_org(self, org_id: str) -> dict:
+        r = await self._client.get(
+            f"{self.server_url}/orgs/{org_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def update_org(self, org_id: str, **fields) -> dict:
+        r = await self._client.put(
+            f"{self.server_url}/orgs/{org_id}", json=fields,
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def delete_org(self, org_id: str) -> None:
+        r = await self._client.delete(
+            f"{self.server_url}/orgs/{org_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+
+    async def list_org_agents(self, org_id: str) -> list[dict]:
+        r = await self._client.get(
+            f"{self.server_url}/orgs/{org_id}/agents",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def get_org_billing(self, org_id: str) -> dict:
+        r = await self._client.get(
+            f"{self.server_url}/orgs/{org_id}/billing",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def get_org_billing_breakdown(self, org_id: str) -> dict:
+        r = await self._client.get(
+            f"{self.server_url}/orgs/{org_id}/billing/breakdown",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     # --- Discovery & Health ---
 
     async def discover(self) -> dict:

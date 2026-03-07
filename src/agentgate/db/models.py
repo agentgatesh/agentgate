@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, String, Text, func
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,10 @@ class Organization(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     api_key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    cost_per_invocation: Mapped[float] = mapped_column(Float, nullable=False, default=0.001)
+    billing_alert_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rate_limit: Mapped[float] = mapped_column(Float, nullable=False, default=10.0)
+    rate_burst: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

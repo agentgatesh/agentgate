@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentGate — Documentation</title>
+    <meta name="description" content="AgentGate documentation: API reference, SDK guide, CLI commands, and integration examples.">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+            --text: #e0e0e0; --text-secondary: #888;
+            --accent: #6366f1; --accent-hover: #818cf8;
+            --code-bg: #1a1a2e; --success: #22c55e;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        .layout { display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 2rem 1.5rem; position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; }
+        .sidebar h2 { font-size: 1.2rem; margin-bottom: 1.5rem; }
+        .sidebar h2 a { color: var(--accent); }
+        .sidebar nav a { display: block; padding: 0.4rem 0; color: var(--text-secondary); font-size: 0.9rem; }
+        .sidebar nav a:hover, .sidebar nav a.active { color: var(--text); }
+        .sidebar nav .section-title { color: var(--text); font-weight: 600; margin-top: 1.2rem; margin-bottom: 0.3rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        .content { margin-left: 260px; max-width: 800px; padding: 3rem 4rem; }
+        .content h1 { font-size: 2rem; margin-bottom: 1rem; color: #fff; }
+        .content h2 { font-size: 1.4rem; margin: 2.5rem 0 1rem; color: #fff; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+        .content h3 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; color: var(--accent-hover); }
+        .content p { margin-bottom: 1rem; }
+        .content ul, .content ol { margin: 0.5rem 0 1rem 1.5rem; }
+        .content li { margin-bottom: 0.3rem; }
+
+        pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem; overflow-x: auto; margin: 1rem 0; font-size: 0.88rem; line-height: 1.6; }
+        code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.88rem; }
+        p code, li code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 4px; }
+        .tag { display: inline-block; background: var(--accent); color: #fff; padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-left: 0.3rem; vertical-align: middle; }
+        .tag.get { background: #22c55e; }
+        .tag.post { background: #3b82f6; }
+        .tag.put { background: #f59e0b; }
+        .tag.delete { background: #ef4444; }
+
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+        th { color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { margin-left: 0; padding: 2rem 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+    <div class="sidebar">
+        <h2><a href="/">AgentGate</a></h2>
+        <nav>
+            <div class="section-title">Getting Started</div>
+            <a href="#quickstart">Quickstart</a>
+            <a href="#installation">Installation</a>
+            <a href="#authentication">Authentication</a>
+
+            <div class="section-title">CLI</div>
+            <a href="#cli-deploy">Deploy</a>
+            <a href="#cli-commands">Commands</a>
+
+            <div class="section-title">API Reference</div>
+            <a href="#api-agents">Agents</a>
+            <a href="#api-tasks">Task Routing</a>
+            <a href="#api-orgs">Organizations</a>
+            <a href="#api-billing">Billing</a>
+            <a href="#api-health">Health & Metrics</a>
+
+            <div class="section-title">SDK</div>
+            <a href="#sdk-sync">Sync Client</a>
+            <a href="#sdk-async">Async Client</a>
+            <a href="#sdk-orgs">Org Management</a>
+
+            <div class="section-title">Concepts</div>
+            <a href="#org-scoped-auth">Org-Scoped Auth</a>
+            <a href="#per-agent-auth">Per-Agent Auth</a>
+            <a href="#rate-limiting">Rate Limiting</a>
+            <a href="#webhooks">Webhooks</a>
+            <a href="#chaining">Agent Chaining</a>
+        </nav>
+    </div>
+
+    <div class="content">
+        <h1>AgentGate Documentation</h1>
+        <p>AgentGate is the open-source gateway to deploy, connect, and monetize AI agents. It implements the A2A (Agent-to-Agent) protocol for agent interoperability.</p>
+
+        <h2 id="quickstart">Quickstart</h2>
+        <p>Get started in under 2 minutes:</p>
+<pre><code># Install the CLI & SDK
+pip install agentgatesh
+
+# Check server status
+agentgate status
+
+# Deploy your first agent
+agentgate deploy ./my-agent/</code></pre>
+
+        <h2 id="installation">Installation</h2>
+<pre><code># Via pip
+pip install agentgatesh
+
+# Or via uv
+uv pip install agentgatesh</code></pre>
+        <p>The package provides both the <code>agentgate</code> CLI and the Python SDK (<code>AgentGateClient</code>, <code>AsyncAgentGateClient</code>).</p>
+
+        <h2 id="authentication">Authentication</h2>
+        <p>AgentGate supports two types of authentication:</p>
+        <ul>
+            <li><strong>Admin API key</strong> — Full access to all endpoints. Set via <code>AGENTGATE_API_KEY</code> env var or <code>--api-key</code> flag.</li>
+            <li><strong>Org API key</strong> — Scoped access. An org key can only manage its own agents, view its own logs/usage/billing.</li>
+        </ul>
+        <p>Both use Bearer token authentication: <code>Authorization: Bearer &lt;key&gt;</code></p>
+
+        <h2 id="cli-deploy">CLI: Deploy an Agent</h2>
+        <p>Create an <code>agentgate.yaml</code> in your agent directory:</p>
+<pre><code>name: my-agent
+description: My awesome AI agent
+url: https://agentgate.sh/my-agent
+version: 1.0.0
+skills:
+  - id: chat
+    name: Chat
+    description: General conversation</code></pre>
+        <p>Then deploy:</p>
+<pre><code>agentgate deploy ./my-agent/ --api-key YOUR_KEY</code></pre>
+
+        <h2 id="cli-commands">CLI Commands</h2>
+        <table>
+            <tr><th>Command</th><th>Description</th></tr>
+            <tr><td><code>agentgate status</code></td><td>Check server health</td></tr>
+            <tr><td><code>agentgate list [--skill X]</code></td><td>List deployed agents</td></tr>
+            <tr><td><code>agentgate deploy &lt;path&gt;</code></td><td>Deploy agent from agentgate.yaml</td></tr>
+            <tr><td><code>agentgate update &lt;id&gt;</code></td><td>Update agent fields</td></tr>
+            <tr><td><code>agentgate delete &lt;id&gt;</code></td><td>Remove an agent</td></tr>
+            <tr><td><code>agentgate logs &lt;id&gt;</code></td><td>View invocation logs</td></tr>
+            <tr><td><code>agentgate usage &lt;id&gt;</code></td><td>View usage stats</td></tr>
+            <tr><td><code>agentgate billing &lt;id&gt;</code></td><td>Usage breakdown by day/month</td></tr>
+            <tr><td><code>agentgate bump &lt;part&gt;</code></td><td>Bump version (patch/minor/major)</td></tr>
+        </table>
+
+        <h2 id="api-agents">API: Agents</h2>
+
+        <h3><span class="tag post">POST</span> /agents/</h3>
+        <p>Register a new agent. Requires admin or org API key.</p>
+<pre><code>curl -X POST https://agentgate.sh/agents/ \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-agent", "url": "https://example.com", "skills": []}'</code></pre>
+
+        <h3><span class="tag get">GET</span> /agents/</h3>
+        <p>List all agents. Public, no auth required. Filter by skill: <code>?skill=echo</code></p>
+
+        <h3><span class="tag get">GET</span> /agents/{id}</h3>
+        <p>Get a single agent by UUID. Public.</p>
+
+        <h3><span class="tag put">PUT</span> /agents/{id}</h3>
+        <p>Update an agent. Admin key or org key (org-scoped).</p>
+
+        <h3><span class="tag delete">DELETE</span> /agents/{id}</h3>
+        <p>Delete an agent. Admin key or org key (org-scoped).</p>
+
+        <h3><span class="tag get">GET</span> /agents/{id}/card</h3>
+        <p>Get the A2A-compliant Agent Card. Public.</p>
+
+        <h3><span class="tag get">GET</span> /agents/{id}/logs</h3>
+        <p>Get invocation logs. Admin or org key. Params: <code>limit</code>, <code>offset</code>.</p>
+
+        <h3><span class="tag get">GET</span> /agents/{id}/usage</h3>
+        <p>Get usage stats (invocations, errors, avg latency). Admin or org key.</p>
+
+        <h3><span class="tag get">GET</span> /agents/{id}/usage/breakdown</h3>
+        <p>Usage breakdown. Params: <code>period=day|month</code>, <code>days=30</code>. Admin or org key.</p>
+
+        <h2 id="api-tasks">API: Task Routing</h2>
+
+        <h3><span class="tag post">POST</span> /agents/{id}/task</h3>
+        <p>Route an A2A task to the agent. If the agent has per-agent auth, a Bearer token is required.</p>
+<pre><code>curl -X POST https://agentgate.sh/agents/AGENT_ID/task \
+  -H "Content-Type: application/json" \
+  -d '{"id": "task-1", "message": {"parts": [{"type": "text", "text": "Hello!"}]}}'</code></pre>
+
+        <h2 id="api-orgs">API: Organizations</h2>
+
+        <h3><span class="tag post">POST</span> /orgs/</h3>
+        <p>Create an organization. Admin only.</p>
+<pre><code>curl -X POST https://agentgate.sh/orgs/ \
+  -H "Authorization: Bearer ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "acme-corp", "api_key": "org-secret-key", "cost_per_invocation": 0.002}'</code></pre>
+
+        <h3><span class="tag get">GET</span> /orgs/</h3>
+        <p>List all organizations. Admin only.</p>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}</h3>
+        <p>Get org details. Admin or org owner.</p>
+
+        <h3><span class="tag put">PUT</span> /orgs/{id}</h3>
+        <p>Update org settings (cost, rate limits, etc). Admin or org owner.</p>
+
+        <h3><span class="tag delete">DELETE</span> /orgs/{id}</h3>
+        <p>Delete an organization. Admin only.</p>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}/agents</h3>
+        <p>List agents in an organization. Admin or org owner.</p>
+
+        <h2 id="api-billing">API: Billing</h2>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}/billing</h3>
+        <p>Get billing summary: total invocations, costs, alert status. Admin or org owner.</p>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}/billing/breakdown</h3>
+        <p>Daily billing breakdown for the last 30 days. Admin or org owner.</p>
+
+        <h2 id="api-health">API: Health & Metrics</h2>
+        <table>
+            <tr><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+            <tr><td><code>GET /health</code></td><td>Public</td><td>Server health + version</td></tr>
+            <tr><td><code>GET /health/agents</code></td><td>Public</td><td>All agents health status</td></tr>
+            <tr><td><code>GET /agents/{id}/health</code></td><td>Public</td><td>Single agent health</td></tr>
+            <tr><td><code>GET /metrics</code></td><td>Admin</td><td>Task routing metrics</td></tr>
+            <tr><td><code>GET /.well-known/agent.json</code></td><td>Public</td><td>A2A discovery</td></tr>
+        </table>
+
+        <h2 id="sdk-sync">SDK: Sync Client</h2>
+<pre><code>from agentgate import AgentGateClient
+
+client = AgentGateClient("https://agentgate.sh", api_key="YOUR_KEY")
+
+# List agents
+agents = client.list_agents(skill="echo")
+
+# Send a task
+result = client.send_task("agent-id", "Hello!")
+
+# Get usage
+usage = client.get_agent_usage("agent-id")
+
+# Organization management
+orgs = client.list_orgs()
+org = client.create_org("acme", api_key="secret-key")
+billing = client.get_org_billing(str(org["id"]))
+
+client.close()</code></pre>
+
+        <h2 id="sdk-async">SDK: Async Client</h2>
+<pre><code>from agentgate import AsyncAgentGateClient
+
+async with AsyncAgentGateClient("https://agentgate.sh", api_key="KEY") as client:
+    agents = await client.list_agents()
+    result = await client.send_task("agent-id", "Hello!")
+    billing = await client.get_org_billing("org-id")</code></pre>
+
+        <h2 id="sdk-orgs">SDK: Org Management</h2>
+<pre><code>from agentgate import AgentGateClient
+
+client = AgentGateClient("https://agentgate.sh", api_key="ADMIN_KEY")
+
+# Create org with custom billing
+org = client.create_org(
+    "acme-corp",
+    api_key="org-secret",
+    cost_per_invocation=0.002,
+    rate_limit=50.0,
+    rate_burst=100,
+)
+
+# List orgs
+orgs = client.list_orgs()
+
+# Get org billing
+billing = client.get_org_billing(str(org["id"]))
+print(f"Total cost: ${billing['total_cost']}")
+
+# Update org settings
+client.update_org(str(org["id"]), rate_limit=100.0)
+
+# Delete org
+client.delete_org(str(org["id"]))</code></pre>
+
+        <h2 id="org-scoped-auth">Org-Scoped Auth</h2>
+        <p>Each organization has its own API key. When an org authenticates, it can only:</p>
+        <ul>
+            <li>Register agents (auto-assigned to the org)</li>
+            <li>Update/delete its own agents</li>
+            <li>View logs, usage, and billing for its agents</li>
+            <li>View its own org details</li>
+        </ul>
+        <p>Admin key retains full access to everything.</p>
+
+        <h2 id="per-agent-auth">Per-Agent Auth</h2>
+        <p>Agents can optionally require a separate API key for task routing:</p>
+<pre><code># Register agent with per-agent auth
+client.register_agent(
+    "my-agent", "https://example.com",
+    agent_api_key="agent-secret-key",
+)
+
+# Send task with per-agent key
+client.send_task("agent-id", "Hello!", agent_api_key="agent-secret-key")</code></pre>
+
+        <h2 id="rate-limiting">Rate Limiting</h2>
+        <p>Task routing is rate-limited using a token bucket algorithm:</p>
+        <ul>
+            <li><strong>Default:</strong> 10 req/s, burst 20 (per IP)</li>
+            <li><strong>Per-org:</strong> Custom <code>rate_limit</code> and <code>rate_burst</code> per organization</li>
+            <li>Backend: Redis (shared) or in-memory fallback</li>
+        </ul>
+
+        <h2 id="webhooks">Webhooks</h2>
+        <p>Agents can have a <code>webhook_url</code> — a fire-and-forget POST is sent after each task completion:</p>
+<pre><code>{
+  "event": "task.completed",
+  "agent_id": "uuid",
+  "agent_name": "my-agent",
+  "task_id": "task-1",
+  "latency_ms": 42.5
+}</code></pre>
+
+        <h2 id="chaining">Agent Chaining</h2>
+        <p>Agents can call other agents through AgentGate routing, enabling complex multi-agent workflows:</p>
+<pre><code># Inside your agent, call another agent via AgentGate
+import httpx
+
+response = httpx.post(
+    "https://agentgate.sh/agents/CALC_AGENT_ID/task",
+    json={"id": "sub-1", "message": {"parts": [{"type": "text", "text": "5 + 3"}]}}
+)
+result = response.json()</code></pre>
+
+        <p style="margin-top: 3rem; color: var(--text-secondary); font-size: 0.85rem;">
+            AgentGate is open source.
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a> |
+            <a href="/">Home</a> |
+            <a href="/dashboard">Dashboard</a> |
+            <a href="/admin">Admin</a> |
+            <a href="/docs">Swagger API</a>
+        </p>
+    </div>
+</div>
+</body>
+</html>

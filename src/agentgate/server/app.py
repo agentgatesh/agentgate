@@ -63,6 +63,11 @@ async def admin_page():
     return (STATIC_DIR / "admin.html").read_text()
 
 
+@app.get("/guide", response_class=HTMLResponse)
+async def guide_page():
+    return (STATIC_DIR / "guide.html").read_text()
+
+
 @app.get("/health/agents")
 async def agents_health():
     return get_all_health()
