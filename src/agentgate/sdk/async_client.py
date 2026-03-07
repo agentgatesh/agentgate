@@ -146,6 +146,33 @@ class AsyncAgentGateClient:
         )
         self._raise_for_status(r)
 
+    # --- Reviews ---
+
+    async def create_review(
+        self, agent_id: str, rating: int, comment: str = "", reviewer: str = "anonymous",
+    ) -> dict:
+        r = await self._client.post(
+            f"{self.server_url}/agents/{agent_id}/reviews",
+            json={"rating": rating, "comment": comment, "reviewer": reviewer},
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def list_reviews(
+        self, agent_id: str, limit: int = 50, offset: int = 0,
+    ) -> list[dict]:
+        r = await self._client.get(
+            f"{self.server_url}/agents/{agent_id}/reviews",
+            params={"limit": limit, "offset": offset},
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def get_review_stats(self, agent_id: str) -> dict:
+        r = await self._client.get(f"{self.server_url}/agents/{agent_id}/reviews/stats")
+        self._raise_for_status(r)
+        return r.json()
+
     # --- A2A communication ---
 
     async def send_task(
@@ -196,6 +223,60 @@ class AsyncAgentGateClient:
         r = await self._client.get(
             f"{self.server_url}/agents/{agent_id}/usage/breakdown",
             params={"period": period, "days": days},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    # --- Chains ---
+
+    async def create_chain(
+        self, name: str, steps: list[dict], description: str = "",
+    ) -> dict:
+        r = await self._client.post(
+            f"{self.server_url}/chains/",
+            json={"name": name, "description": description, "steps": steps},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def list_chains(self) -> list[dict]:
+        r = await self._client.get(
+            f"{self.server_url}/chains/",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def get_chain(self, chain_id: str) -> dict:
+        r = await self._client.get(
+            f"{self.server_url}/chains/{chain_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def update_chain(self, chain_id: str, **fields) -> dict:
+        r = await self._client.put(
+            f"{self.server_url}/chains/{chain_id}",
+            json=fields,
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def delete_chain(self, chain_id: str) -> None:
+        r = await self._client.delete(
+            f"{self.server_url}/chains/{chain_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+
+    async def run_chain(self, chain_id: str, input_text: str) -> dict:
+        r = await self._client.post(
+            f"{self.server_url}/chains/{chain_id}/run",
+            json={"input": input_text},
             headers=self._headers(auth=True),
         )
         self._raise_for_status(r)
