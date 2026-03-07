@@ -1874,3 +1874,290 @@ def test_plugins_file_exists():
         / "src/agentgate/server/plugins.py"
     )
     assert plugins.exists()
+
+
+# ---------------------------------------------------------------------------
+# WebSocket endpoint exists
+# ---------------------------------------------------------------------------
+
+
+def test_ws_endpoint_exists():
+    from agentgate.server.routes import route_task_ws
+
+    assert callable(route_task_ws)
+
+
+# ---------------------------------------------------------------------------
+# Advanced search API — GET /agents/search
+# ---------------------------------------------------------------------------
+
+
+def test_search_agents_no_query():
+    agent = _make_fake_agent(name="search-agent")
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/search")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total" in data
+    assert "agents" in data
+    assert data["total"] >= 1
+
+
+def test_search_agents_by_query():
+    agent1 = _make_fake_agent(name="nlp-bot", description="Natural language processing")
+    agent2 = _make_fake_agent(name="vision-bot", description="Image recognition")
+    mock_factory = _mock_async_session_with_agents([agent1, agent2])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/search?q=nlp")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["agents"][0]["name"] == "nlp-bot"
+
+
+def test_search_agents_multi_tag():
+    agent1 = _make_fake_agent(name="a1", tags=["nlp", "chat"])
+    agent2 = _make_fake_agent(name="a2", tags=["nlp", "vision"])
+    agent3 = _make_fake_agent(name="a3", tags=["vision"])
+    mock_factory = _mock_async_session_with_agents([agent1, agent2, agent3])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/search?tags=nlp,chat")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["agents"][0]["name"] == "a1"
+
+
+def test_search_agents_sort_name():
+    agent1 = _make_fake_agent(name="zebra")
+    agent2 = _make_fake_agent(name="alpha")
+    mock_factory = _mock_async_session_with_agents([agent1, agent2])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/search?sort=name")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["agents"][0]["name"] == "alpha"
+    assert data["agents"][1]["name"] == "zebra"
+
+
+def test_search_agents_pagination():
+    agents = [_make_fake_agent(name=f"agent-{i}") for i in range(5)]
+    mock_factory = _mock_async_session_with_agents(agents)
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/search?limit=2&offset=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 5
+    assert len(data["agents"]) == 2
+    assert data["offset"] == 1
+
+
+def test_search_agents_no_match():
+    agent = _make_fake_agent(name="test")
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/search?q=nonexistent")
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Plugin registry — load_from_config
+# ---------------------------------------------------------------------------
+
+
+def test_plugin_load_from_config_missing_file():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+    loaded = pm.load_from_config("/nonexistent/plugins.yaml")
+    assert loaded == 0
+
+
+def test_plugin_load_from_config_valid(tmp_path):
+    import yaml
+
+    from agentgate.server.plugins import PluginManager
+
+    # Create a test plugin module
+    plugin_dir = tmp_path / "test_plugins"
+    plugin_dir.mkdir()
+    (plugin_dir / "__init__.py").write_text("")
+    (plugin_dir / "my_plugin.py").write_text(
+        "async def my_hook(ctx):\n    return ctx\n"
+    )
+
+    # Create YAML config
+    config = {
+        "plugins": [
+            {"module": "test_plugins.my_plugin", "hook": "pre_task", "function": "my_hook"},
+        ]
+    }
+    config_file = tmp_path / "plugins.yaml"
+    config_file.write_text(yaml.dump(config))
+
+    import sys
+    sys.path.insert(0, str(tmp_path))
+    try:
+        pm = PluginManager()
+        loaded = pm.load_from_config(str(config_file))
+        assert loaded == 1
+        assert len(pm.pre_hooks) == 1
+    finally:
+        sys.path.remove(str(tmp_path))
+
+
+def test_plugin_load_from_config_bad_module(tmp_path):
+    import yaml
+
+    from agentgate.server.plugins import PluginManager
+
+    config = {
+        "plugins": [
+            {"module": "nonexistent.module", "hook": "pre_task", "function": "hook"},
+        ]
+    }
+    config_file = tmp_path / "plugins.yaml"
+    config_file.write_text(yaml.dump(config))
+
+    pm = PluginManager()
+    loaded = pm.load_from_config(str(config_file))
+    assert loaded == 0
+
+
+def test_plugin_info():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+
+    async def hook(ctx):
+        pass
+
+    pm.add_pre_hook(hook)
+    pm.add_post_hook(hook)
+    info = pm.plugin_info
+    assert len(info) == 2
+    assert info[0]["type"] == "pre_task"
+    assert info[1]["type"] == "post_task"
+
+
+# ---------------------------------------------------------------------------
+# Rate limit dashboard
+# ---------------------------------------------------------------------------
+
+
+def test_ratelimits_page():
+    response = client.get("/ratelimits")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Rate Limits" in response.text
+    assert "AgentGate" in response.text
+
+
+def test_ratelimits_data_no_auth():
+    with patch("agentgate.server.app.settings") as mock_settings:
+        mock_settings.api_key = "test-key"
+        response = client.get("/ratelimits/data")
+    assert response.status_code == 401
+
+
+def test_ratelimits_data_with_auth():
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.app.settings") as mock_settings,
+        patch("agentgate.server.app.async_session", mock_factory),
+    ):
+        mock_settings.api_key = "test-key"
+        response = client.get(
+            "/ratelimits/data",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert "global" in data
+    assert "organizations" in data
+    assert "rate" in data["global"]
+    assert "burst" in data["global"]
+
+
+# ---------------------------------------------------------------------------
+# Plugins info endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_plugins_info_no_auth():
+    with patch("agentgate.server.app.settings") as mock_settings:
+        mock_settings.api_key = "test-key"
+        response = client.get("/plugins/info")
+    assert response.status_code == 401
+
+
+def test_plugins_info_with_auth():
+    with patch("agentgate.server.app.settings") as mock_settings:
+        mock_settings.api_key = "test-key"
+        response = client.get(
+            "/plugins/info",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert "plugins" in data
+    assert "total" in data
+
+
+# ---------------------------------------------------------------------------
+# SDK — search_agents method
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_sync_has_search():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "search_agents")
+    c.close()
+
+
+def test_sdk_async_has_search():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "search_agents")
+
+
+# ---------------------------------------------------------------------------
+# Config — plugin_config setting
+# ---------------------------------------------------------------------------
+
+
+def test_plugin_config_setting():
+    from agentgate.core.config import Settings
+
+    s = Settings(database_url="sqlite://", plugin_config="/path/to/plugins.yaml")
+    assert s.plugin_config == "/path/to/plugins.yaml"
+
+
+# ---------------------------------------------------------------------------
+# Rate limit dashboard HTML file exists
+# ---------------------------------------------------------------------------
+
+
+def test_ratelimits_html_exists():
+    from pathlib import Path
+
+    html = (
+        Path(__file__).parent.parent
+        / "src/agentgate/server/static/ratelimits.html"
+    )
+    assert html.exists()

@@ -1,10 +1,20 @@
 import asyncio
 import hashlib
+import json
 import logging
 import uuid
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import case, cast, desc, func, select
 from sqlalchemy.types import Date
@@ -120,6 +130,97 @@ async def list_tags():
         for t in agent.tags or []:
             tags[t] = tags.get(t, 0) + 1
     return {"tags": [{"name": k, "count": v} for k, v in sorted(tags.items())]}
+
+
+@router.get("/search")
+async def search_agents(
+    q: str | None = Query(default=None, description="Full-text search query"),
+    tags: str | None = Query(default=None, description="Comma-separated tags (AND logic)"),
+    skill: str | None = Query(default=None, description="Filter by skill id or name"),
+    sort: str | None = Query(default="newest", pattern="^(newest|name|version)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """Advanced agent search with full-text, multi-tag, and sorting.
+
+    - q: search name, description, skills, and tags
+    - tags: comma-separated list (all must match)
+    - skill: filter by skill id or name
+    - sort: newest (default), name, version
+    """
+    async with async_session() as session:
+        query = select(Agent).order_by(Agent.created_at.desc())
+        result = await session.execute(query)
+        agents = list(result.scalars().all())
+
+    # Full-text search across name, description, skills, tags
+    if q:
+        q_lower = q.lower()
+        agents = [
+            a for a in agents
+            if q_lower in a.name.lower()
+            or q_lower in (a.description or "").lower()
+            or any(
+                q_lower in s.get("id", "").lower()
+                or q_lower in s.get("name", "").lower()
+                or q_lower in s.get("description", "").lower()
+                for s in (a.skills or [])
+            )
+            or any(q_lower in t.lower() for t in (a.tags or []))
+        ]
+
+    # Multi-tag filter (AND logic)
+    if tags:
+        required_tags = [t.strip().lower() for t in tags.split(",") if t.strip()]
+        agents = [
+            a for a in agents
+            if all(
+                any(rt == t.lower() for t in (a.tags or []))
+                for rt in required_tags
+            )
+        ]
+
+    # Skill filter
+    if skill:
+        skill_lower = skill.lower()
+        agents = [
+            a for a in agents
+            if any(
+                skill_lower in s.get("id", "").lower()
+                or skill_lower in s.get("name", "").lower()
+                for s in (a.skills or [])
+            )
+        ]
+
+    # Sorting
+    if sort == "name":
+        agents.sort(key=lambda a: a.name.lower())
+    elif sort == "version":
+        agents.sort(key=lambda a: a.version, reverse=True)
+
+    total = len(agents)
+    agents = agents[offset:offset + limit]
+
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "agents": [
+            {
+                "id": str(a.id),
+                "name": a.name,
+                "description": a.description,
+                "url": a.url,
+                "version": a.version,
+                "skills": a.skills,
+                "tags": a.tags or [],
+                "org_id": str(a.org_id) if a.org_id else None,
+                "created_at": a.created_at.isoformat(),
+                "updated_at": a.updated_at.isoformat(),
+            }
+            for a in agents
+        ],
+    }
 
 
 @router.get("/by-name/{name}", response_model=list[AgentResponse])
@@ -657,3 +758,155 @@ async def route_task_stream(
             )
 
     return EventSourceResponse(event_generator())
+
+
+@router.websocket("/{agent_id}/task/ws")
+async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
+    """WebSocket endpoint for bidirectional task routing.
+
+    Client sends JSON messages with A2A task payloads.
+    Server responds with JSON messages containing:
+      {"type": "status", "data": "..."}
+      {"type": "chunk", "data": "..."}
+      {"type": "result", "data": {...}}
+      {"type": "error", "data": "..."}
+
+    Auth: send {"type": "auth", "token": "..."} as first message if agent requires auth.
+    """
+    await websocket.accept()
+    client_ip = websocket.client.host if websocket.client else "unknown"
+
+    # Resolve agent
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            await websocket.send_json({"type": "error", "data": "Agent not found"})
+            await websocket.close(code=4004)
+            return
+
+    agent_name = agent.name
+    webhook_url = agent.webhook_url
+    target_url = f"{agent.url.rstrip('/')}/a2a"
+    auth_token: str | None = None
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "data": "Invalid JSON"})
+                continue
+
+            msg_type = msg.get("type", "task")
+
+            # Handle auth message
+            if msg_type == "auth":
+                auth_token = msg.get("token")
+                await websocket.send_json({"type": "status", "data": "Authenticated"})
+                continue
+
+            # For task messages, validate auth if required
+            if agent.api_key_hash:
+                if not auth_token or _hash_api_key(auth_token) != agent.api_key_hash:
+                    await websocket.send_json({
+                        "type": "error", "data": "Invalid or missing agent API key",
+                    })
+                    continue
+
+            # Rate limiting
+            if not task_limiter.allow(client_ip):
+                await websocket.send_json({"type": "error", "data": "Too many requests"})
+                continue
+
+            # Extract task payload
+            task = msg.get("task", msg) if msg_type == "task" else msg.get("task", msg)
+            task_id_str = task.get("id")
+
+            await websocket.send_json({
+                "type": "status", "data": f"Routing task to {agent_name}",
+            })
+
+            # Run pre-task plugins
+            try:
+                pre_context = await plugin_manager.run_pre_hooks({
+                    "agent_id": str(agent_id),
+                    "agent_name": agent_name,
+                    "task": task,
+                    "client_ip": client_ip,
+                })
+                task = pre_context.get("task", task)
+            except Exception as e:
+                await websocket.send_json({"type": "error", "data": str(e)})
+                continue
+
+            # Route the task
+            with Timer() as t:
+                try:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.post(target_url, json=task)
+                except httpx.ConnectError:
+                    record_request(agent_name, t.elapsed_ms, error_type="connect_error")
+                    await _save_task_log(
+                        agent_id, agent_name, client_ip,
+                        task_id_str, "error", t.elapsed_ms, "connect_error",
+                    )
+                    await websocket.send_json({
+                        "type": "error", "data": f"Cannot reach agent at {agent.url}",
+                    })
+                    continue
+                except httpx.TimeoutException:
+                    record_request(agent_name, t.elapsed_ms, error_type="timeout")
+                    await _save_task_log(
+                        agent_id, agent_name, client_ip,
+                        task_id_str, "error", t.elapsed_ms, "timeout",
+                    )
+                    await websocket.send_json({
+                        "type": "error", "data": f"Agent at {agent.url} timed out",
+                    })
+                    continue
+
+            if resp.status_code >= 400:
+                record_request(agent_name, t.elapsed_ms, error_type=f"http_{resp.status_code}")
+                await _save_task_log(
+                    agent_id, agent_name, client_ip,
+                    task_id_str, "error", t.elapsed_ms, f"http_{resp.status_code}",
+                )
+                await websocket.send_json({
+                    "type": "error", "data": f"Agent returned {resp.status_code}",
+                })
+                continue
+
+            record_request(agent_name, t.elapsed_ms)
+            result_data = resp.json()
+
+            await websocket.send_json({"type": "result", "data": result_data})
+
+            # Background: save log, fire webhook, run post-hooks
+            await _save_task_log(
+                agent_id, agent_name, client_ip,
+                task_id_str, "success", t.elapsed_ms,
+            )
+            if webhook_url:
+                asyncio.create_task(_fire_webhook(
+                    webhook_url,
+                    {
+                        "event": "task.completed",
+                        "agent_id": str(agent_id),
+                        "agent_name": agent_name,
+                        "task_id": task_id_str,
+                        "latency_ms": round(t.elapsed_ms, 1),
+                    },
+                ))
+            asyncio.create_task(plugin_manager.run_post_hooks({
+                "agent_id": str(agent_id),
+                "agent_name": agent_name,
+                "task": task,
+                "client_ip": client_ip,
+                "status": "success",
+                "latency_ms": round(t.elapsed_ms, 1),
+                "response": result_data,
+            }))
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected from agent %s", agent_name)

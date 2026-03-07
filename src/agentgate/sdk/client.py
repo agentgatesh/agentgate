@@ -55,6 +55,34 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    def search_agents(
+        self,
+        q: str | None = None,
+        tags: str | None = None,
+        skill: str | None = None,
+        sort: str = "newest",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Advanced agent search with full-text, multi-tag, and sorting.
+
+        Args:
+            q: Full-text search query
+            tags: Comma-separated tags (AND logic)
+            skill: Filter by skill id or name
+            sort: newest, name, or version
+        """
+        params: dict = {"sort": sort, "limit": limit, "offset": offset}
+        if q:
+            params["q"] = q
+        if tags:
+            params["tags"] = tags
+        if skill:
+            params["skill"] = skill
+        r = self._client.get(f"{self.server_url}/agents/search", params=params)
+        self._raise_for_status(r)
+        return r.json()
+
     def get_agent(self, agent_id: str) -> dict:
         """Get a single agent by ID."""
         r = self._client.get(f"{self.server_url}/agents/{agent_id}")

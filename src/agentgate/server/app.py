@@ -25,6 +25,18 @@ STATIC_DIR = Path(__file__).parent / "static"
 async def lifespan(app: FastAPI):
     import asyncio
 
+    from agentgate.server.plugins import plugin_manager
+
+    # Load plugins from config file if configured
+    if settings.plugin_config:
+        loaded = plugin_manager.load_from_config(settings.plugin_config)
+        if loaded:
+            import logging
+
+            logging.getLogger("agentgate").info(
+                "Loaded %d plugins from %s", loaded, settings.plugin_config,
+            )
+
     health_task = asyncio.create_task(health_check_loop())
     retention_task = asyncio.create_task(log_retention_loop())
     yield
@@ -77,6 +89,11 @@ async def marketplace_page():
     return (STATIC_DIR / "marketplace.html").read_text()
 
 
+@app.get("/ratelimits", response_class=HTMLResponse)
+async def ratelimits_page():
+    return (STATIC_DIR / "ratelimits.html").read_text()
+
+
 @app.get("/health/agents")
 @app.get("/v1/health/agents")
 async def agents_health():
@@ -90,6 +107,58 @@ async def metrics(credentials: HTTPAuthorizationCredentials | None = Depends(bea
         if not credentials or credentials.credentials != settings.api_key:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return get_metrics()
+
+
+@app.get("/ratelimits/data")
+@app.get("/v1/ratelimits/data")
+async def ratelimits_data(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+):
+    """Get rate limit config and current state for all orgs."""
+    if settings.api_key:
+        if not credentials or credentials.credentials != settings.api_key:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    from agentgate.db.models import Organization
+
+    async with async_session() as session:
+        result = await session.execute(select(Organization).order_by(Organization.name))
+        orgs = result.scalars().all()
+
+    from agentgate.server.ratelimit import task_limiter
+
+    return {
+        "global": {
+            "rate": task_limiter.rate,
+            "burst": task_limiter.burst,
+        },
+        "organizations": [
+            {
+                "id": str(o.id),
+                "name": o.name,
+                "rate_limit": o.rate_limit,
+                "rate_burst": o.rate_burst,
+                "cost_per_invocation": o.cost_per_invocation,
+            }
+            for o in orgs
+        ],
+    }
+
+
+@app.get("/plugins/info")
+@app.get("/v1/plugins/info")
+async def plugins_info(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+    """Get info about loaded plugins."""
+    if settings.api_key:
+        if not credentials or credentials.credentials != settings.api_key:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    from agentgate.server.plugins import plugin_manager
+
+    return {
+        "plugins": plugin_manager.plugin_info,
+        "total": len(plugin_manager.plugin_info),
+    }
 
 
 @app.get("/.well-known/agent.json")

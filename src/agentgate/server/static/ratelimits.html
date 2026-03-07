@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentGate Rate Limits</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent); text-decoration: none; }
+
+        .topbar {
+            border-bottom: 1px solid var(--border);
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .topbar .logo { font-size: 18px; font-weight: 700; }
+        .topbar .logo span { color: var(--accent); }
+        .topbar nav { display: flex; gap: 20px; font-size: 14px; }
+        .topbar nav a { color: var(--text-muted); }
+        .topbar nav a:hover { color: var(--text); }
+
+        .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+        h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+        .auth-bar {
+            display: flex; gap: 12px; margin-bottom: 24px;
+        }
+        .auth-bar input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }
+        .auth-bar input:focus { border-color: var(--accent); }
+        .auth-bar button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .auth-bar button:hover { background: var(--accent-hover); }
+
+        .section { margin-bottom: 32px; }
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            font-size: 11px;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 12px;
+        }
+
+        .global-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        .stat-box {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: rgba(59, 130, 246, 0.03); }
+
+        .mono {
+            font-family: "SF Mono", Monaco, monospace;
+            font-size: 13px;
+        }
+
+        .empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px 0;
+            font-size: 14px;
+        }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--red);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--red);
+            font-size: 14px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        @media (max-width: 640px) {
+            .global-info { grid-template-columns: 1fr 1fr; }
+            .auth-bar { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="logo">Agent<span>Gate</span></div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/marketplace">Marketplace</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/ratelimits">Rate Limits</a>
+            <a href="/admin">Admin</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        <h1>Rate Limits Dashboard</h1>
+        <p class="subtitle">View global and per-organization rate limit configurations.</p>
+
+        <div class="auth-bar">
+            <input type="password" id="api-key" placeholder="Enter admin API key...">
+            <button onclick="loadData()">Load</button>
+        </div>
+
+        <div class="error-msg" id="error-msg"></div>
+
+        <div class="section">
+            <div class="section-title">Global Rate Limits</div>
+            <div class="card">
+                <div class="global-info" id="global-info">
+                    <div class="empty">Enter API key to load data</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">
+                Per-Organization Limits
+                <span class="badge" id="org-count">0 orgs</span>
+            </div>
+            <div class="card">
+                <div id="org-table-wrap">
+                    <div class="empty">No data loaded</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadData() {
+            const key = document.getElementById('api-key').value;
+            const errEl = document.getElementById('error-msg');
+            errEl.style.display = 'none';
+
+            if (!key) {
+                errEl.textContent = 'Please enter an API key.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/ratelimits/data', {
+                    headers: { 'Authorization': 'Bearer ' + key }
+                });
+                if (!resp.ok) {
+                    errEl.textContent = resp.status === 401
+                        ? 'Invalid API key.'
+                        : 'Error loading data: ' + resp.status;
+                    errEl.style.display = 'block';
+                    return;
+                }
+                const data = await resp.json();
+                renderGlobal(data.global);
+                renderOrgs(data.organizations);
+            } catch (e) {
+                errEl.textContent = 'Network error: ' + e.message;
+                errEl.style.display = 'block';
+            }
+        }
+
+        function renderGlobal(g) {
+            document.getElementById('global-info').innerHTML =
+                '<div class="stat-box">' +
+                    '<div class="stat-value">' + g.rate + '</div>' +
+                    '<div class="stat-label">Requests / second</div>' +
+                '</div>' +
+                '<div class="stat-box">' +
+                    '<div class="stat-value">' + g.burst + '</div>' +
+                    '<div class="stat-label">Burst capacity</div>' +
+                '</div>' +
+                '<div class="stat-box">' +
+                    '<div class="stat-value">' + (g.burst / g.rate).toFixed(1) + 's</div>' +
+                    '<div class="stat-label">Refill time</div>' +
+                '</div>';
+        }
+
+        function renderOrgs(orgs) {
+            document.getElementById('org-count').textContent = orgs.length + ' orgs';
+
+            if (orgs.length === 0) {
+                document.getElementById('org-table-wrap').innerHTML =
+                    '<div class="empty">No organizations configured</div>';
+                return;
+            }
+
+            let html = '<table><thead><tr>' +
+                '<th>Organization</th>' +
+                '<th>Rate (req/s)</th>' +
+                '<th>Burst</th>' +
+                '<th>Cost / Invocation</th>' +
+                '</tr></thead><tbody>';
+
+            orgs.forEach(function(o) {
+                html += '<tr>' +
+                    '<td>' + o.name + '</td>' +
+                    '<td class="mono">' + o.rate_limit + '</td>' +
+                    '<td class="mono">' + o.rate_burst + '</td>' +
+                    '<td class="mono">$' + o.cost_per_invocation.toFixed(4) + '</td>' +
+                    '</tr>';
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('org-table-wrap').innerHTML = html;
+        }
+    </script>
+</body>
+</html>

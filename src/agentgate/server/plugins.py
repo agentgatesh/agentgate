@@ -104,5 +104,78 @@ class PluginManager:
                 logger.exception("Post-task plugin %s failed", hook.__name__)
 
 
+    def load_from_config(self, config_path: str) -> int:
+        """Load plugins from a YAML config file.
+
+        Config format:
+            plugins:
+              - module: mypackage.myplugin
+                hook: pre_task
+                function: my_pre_hook
+              - module: mypackage.audit
+                hook: post_task
+                function: audit_result
+
+        Returns the number of plugins loaded.
+        """
+        import importlib
+        from pathlib import Path
+
+        import yaml
+
+        path = Path(config_path)
+        if not path.exists():
+            logger.warning("Plugin config not found: %s", config_path)
+            return 0
+
+        with open(path) as f:
+            data = yaml.safe_load(f)
+
+        if not data or "plugins" not in data:
+            logger.info("No plugins defined in %s", config_path)
+            return 0
+
+        loaded = 0
+        for entry in data["plugins"]:
+            module_name = entry.get("module")
+            func_name = entry.get("function")
+            hook_type = entry.get("hook", "pre_task")
+
+            if not module_name or not func_name:
+                logger.warning("Skipping invalid plugin entry: %s", entry)
+                continue
+
+            try:
+                mod = importlib.import_module(module_name)
+                fn = getattr(mod, func_name)
+                if hook_type == "pre_task":
+                    self.add_pre_hook(fn)
+                elif hook_type == "post_task":
+                    self.add_post_hook(fn)
+                else:
+                    logger.warning(
+                        "Unknown hook type %s for %s.%s",
+                        hook_type, module_name, func_name,
+                    )
+                    continue
+                logger.info("Loaded plugin %s.%s as %s", module_name, func_name, hook_type)
+                loaded += 1
+            except (ImportError, AttributeError) as e:
+                logger.error("Failed to load plugin %s.%s: %s", module_name, func_name, e)
+
+        return loaded
+
+    @property
+    def plugin_info(self) -> list[dict]:
+        """Return info about loaded plugins."""
+        return [
+            {"name": h.__name__, "type": "pre_task", "module": h.__module__}
+            for h in self._pre_hooks
+        ] + [
+            {"name": h.__name__, "type": "post_task", "module": h.__module__}
+            for h in self._post_hooks
+        ]
+
+
 # Global plugin manager instance
 plugin_manager = PluginManager()
