@@ -51,6 +51,21 @@ class AsyncAgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    async def get_agent_versions(self, name: str, version: str | None = None) -> list[dict]:
+        params = {}
+        if version:
+            params["version"] = version
+        r = await self._client.get(
+            f"{self.server_url}/agents/by-name/{name}", params=params,
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def get_agent_latest(self, name: str) -> dict:
+        r = await self._client.get(f"{self.server_url}/agents/by-name/{name}/latest")
+        self._raise_for_status(r)
+        return r.json()
+
     async def get_agent_health(self, agent_id: str) -> dict:
         r = await self._client.get(f"{self.server_url}/agents/{agent_id}/health")
         self._raise_for_status(r)

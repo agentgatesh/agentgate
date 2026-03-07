@@ -39,8 +39,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Mount routers at both / (backward compat) and /v1/ (versioned API)
 app.include_router(agents_router)
 app.include_router(orgs_router)
+app.include_router(agents_router, prefix="/v1")
+app.include_router(orgs_router, prefix="/v1")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -49,6 +52,7 @@ async def landing_page():
 
 
 @app.get("/health")
+@app.get("/v1/health")
 async def health():
     return {"status": "ok", "version": __version__}
 
@@ -69,11 +73,13 @@ async def guide_page():
 
 
 @app.get("/health/agents")
+@app.get("/v1/health/agents")
 async def agents_health():
     return get_all_health()
 
 
 @app.get("/metrics")
+@app.get("/v1/metrics")
 async def metrics(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
     if settings.api_key:
         if not credentials or credentials.credentials != settings.api_key:
