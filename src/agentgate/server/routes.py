@@ -892,6 +892,29 @@ async def route_task_stream(
         if not credentials or _hash_api_key(credentials.credentials) != agent.api_key_hash:
             raise HTTPException(status_code=401, detail="Invalid or missing agent API key")
 
+    # Resolve calling org for billing
+    caller_org_for_billing = None
+    if credentials:
+        key_hash = _hash_api_key(credentials.credentials)
+        async with async_session() as session:
+            result = await session.execute(
+                select(Organization).where(Organization.api_key_hash == key_hash)
+            )
+            caller_org_for_billing = result.scalar_one_or_none()
+
+    # Pre-check balance (fail fast with 402)
+    if agent.price_per_task > 0 and caller_org_for_billing:
+        if caller_org_for_billing.balance < agent.price_per_task:
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    f"Insufficient balance: "
+                    f"{caller_org_for_billing.balance:.4f} < "
+                    f"{agent.price_per_task:.4f} "
+                    f"(agent: {agent.name})"
+                ),
+            )
+
     agent_name = agent.name
     webhook_url = agent.webhook_url
     task_id_str = task.get("id")
@@ -935,6 +958,15 @@ async def route_task_stream(
         logger.info(
             "Task streamed to %s — %.0fms", agent_name, t.elapsed_ms,
         )
+
+        # Charge billing AFTER successful stream
+        if agent.price_per_task > 0:
+            charged, err = await _process_billing(
+                agent, caller_org_for_billing, task_id_str,
+            )
+            if not charged:
+                yield {"event": "error", "data": err}
+                return
 
         yield {
             "event": "result",
@@ -990,6 +1022,7 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
     webhook_url = agent.webhook_url
     target_url = f"{agent.url.rstrip('/')}/a2a"
     auth_token: str | None = None
+    caller_org_for_billing: Organization | None = None
 
     try:
         while True:
@@ -1005,6 +1038,14 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
             # Handle auth message
             if msg_type == "auth":
                 auth_token = msg.get("token")
+                # Resolve calling org for billing
+                if auth_token:
+                    key_hash = _hash_api_key(auth_token)
+                    async with async_session() as session:
+                        result = await session.execute(
+                            select(Organization).where(Organization.api_key_hash == key_hash)
+                        )
+                        caller_org_for_billing = result.scalar_one_or_none()
                 await websocket.send_json({"type": "status", "data": "Authenticated"})
                 continue
 
@@ -1024,6 +1065,20 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
             # Extract task payload
             task = msg.get("task", msg) if msg_type == "task" else msg.get("task", msg)
             task_id_str = task.get("id")
+
+            # Pre-check balance (fail fast with 402)
+            if agent.price_per_task > 0 and caller_org_for_billing:
+                if caller_org_for_billing.balance < agent.price_per_task:
+                    await websocket.send_json({
+                        "type": "error",
+                        "data": (
+                            f"Insufficient balance: "
+                            f"{caller_org_for_billing.balance:.4f} < "
+                            f"{agent.price_per_task:.4f} "
+                            f"(agent: {agent.name})"
+                        ),
+                    })
+                    continue
 
             await websocket.send_json({
                 "type": "status", "data": f"Routing task to {agent_name}",
@@ -1081,6 +1136,21 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
 
             record_request(agent_name, t.elapsed_ms)
             result_data = resp.json()
+
+            # Charge billing AFTER successful response
+            if agent.price_per_task > 0:
+                charged, err = await _process_billing(
+                    agent, caller_org_for_billing, task_id_str,
+                )
+                if not charged:
+                    await websocket.send_json({"type": "error", "data": err})
+                    continue
+                # Refresh balance for next task in same WS session
+                if caller_org_for_billing:
+                    async with async_session() as session:
+                        refreshed = await session.get(Organization, caller_org_for_billing.id)
+                        if refreshed:
+                            caller_org_for_billing = refreshed
 
             await websocket.send_json({"type": "result", "data": result_data})
 
