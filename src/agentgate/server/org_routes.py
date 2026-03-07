@@ -452,6 +452,57 @@ async def topup_org_wallet(
 
 
 # ---------------------------------------------------------------------------
+# Tier upgrade/downgrade
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{org_id}/tier")
+async def change_org_tier(
+    org_id: uuid.UUID,
+    body: dict,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+):
+    """Change an organization's tier. Admin or org owner.
+
+    Body: {"tier": "pro"}
+    """
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    new_tier = body.get("tier", "")
+    if new_tier not in TIER_LIMITS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid tier: {new_tier}. Must be one of: {', '.join(TIER_LIMITS.keys())}",
+        )
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        old_tier = org.tier
+        if old_tier == new_tier:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Already on tier: {new_tier}",
+            )
+
+        org.tier = new_tier
+        await session.commit()
+        await session.refresh(org)
+
+    new_limits = TIER_LIMITS[new_tier]
+    return {
+        "org_id": str(org_id),
+        "org_name": org.name,
+        "old_tier": old_tier,
+        "new_tier": new_tier,
+        "tier_limits": new_limits,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Transactions
 # ---------------------------------------------------------------------------
 

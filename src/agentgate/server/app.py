@@ -92,6 +92,16 @@ async def marketplace_page():
     return (STATIC_DIR / "marketplace.html").read_text()
 
 
+@app.get("/billing", response_class=HTMLResponse)
+async def billing_page():
+    return (STATIC_DIR / "billing.html").read_text()
+
+
+@app.get("/pricing", response_class=HTMLResponse)
+async def pricing_page():
+    return (STATIC_DIR / "pricing.html").read_text()
+
+
 @app.get("/ratelimits", response_class=HTMLResponse)
 async def ratelimits_page():
     return (STATIC_DIR / "ratelimits.html").read_text()

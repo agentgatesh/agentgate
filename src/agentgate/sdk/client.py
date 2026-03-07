@@ -451,6 +451,16 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    def change_org_tier(self, org_id: str, tier: str) -> dict:
+        """Change an organization's tier (free/pro/enterprise)."""
+        r = self._client.post(
+            f"{self.server_url}/orgs/{org_id}/tier",
+            json={"tier": tier},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     def rotate_org_key(self, org_id: str) -> dict:
         """Start API key rotation. Returns new key (shown once)."""
         r = self._client.post(

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Pricing — AgentGate</title>
+    <meta name="description" content="AgentGate pricing plans. Deploy AI agents for free or upgrade for higher limits, lower fees, and priority support.">
+    <meta name="keywords" content="AgentGate pricing, AI agent hosting, agent deployment pricing, A2A gateway plans">
+    <meta name="author" content="AgentGate">
+    <link rel="canonical" href="https://agentgate.sh/pricing">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agentgate.sh/pricing">
+    <meta property="og:title" content="Pricing — AgentGate">
+    <meta property="og:description" content="Deploy AI agents for free or upgrade for higher limits, lower fees, and priority support.">
+    <meta property="og:site_name" content="AgentGate">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Pricing — AgentGate">
+    <meta name="twitter:description" content="Deploy AI agents for free or upgrade for higher limits, lower fees, and priority support.">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Nav */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1100px;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+        nav .links a.active { color: var(--text); }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            padding: 64px 0 48px;
+        }
+        .page-header h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .page-header p {
+            color: var(--text-muted);
+            font-size: 18px;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+
+        /* Pricing Cards */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 80px;
+        }
+
+        .pricing-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 36px 28px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .pricing-card.featured {
+            border-color: var(--accent);
+            box-shadow: 0 0 24px rgba(59, 130, 246, 0.15);
+        }
+
+        .pricing-badge {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 16px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pricing-card h2 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .pricing-price {
+            font-size: 40px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .pricing-price .period {
+            font-size: 16px;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        .pricing-description {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pricing-features {
+            list-style: none;
+            margin-bottom: 32px;
+            flex: 1;
+        }
+        .pricing-features li {
+            padding: 6px 0;
+            font-size: 14px;
+            color: var(--text);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .pricing-features li::before {
+            content: "[+]";
+            color: var(--green);
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            text-align: center;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            color: #fff;
+        }
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-secondary:hover {
+            border-color: var(--text-muted);
+            color: #fff;
+        }
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+
+        /* Comparison Table */
+        .comparison-section {
+            margin-bottom: 80px;
+        }
+        .comparison-section h2 {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .comparison-section .subtitle {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 36px;
+            font-size: 16px;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .comparison-table th,
+        .comparison-table td {
+            padding: 14px 16px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        .comparison-table th:first-child,
+        .comparison-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+        .comparison-table thead th {
+            font-size: 16px;
+            font-weight: 700;
+            padding-bottom: 18px;
+            border-bottom: 2px solid var(--border);
+        }
+        .comparison-table thead th.highlight {
+            color: var(--accent);
+        }
+        .comparison-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .check {
+            color: var(--green);
+            font-weight: 700;
+        }
+        .dash {
+            color: var(--text-muted);
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        footer a { color: var(--text-muted); }
+        footer a:hover { color: var(--text); }
+
+        /* Responsive */
+        @media (max-width: 800px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+                max-width: 400px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .page-header { padding: 48px 0 32px; }
+            .page-header h1 { font-size: 28px; }
+            .comparison-table { font-size: 12px; }
+            .comparison-table th,
+            .comparison-table td { padding: 10px 8px; }
+            nav .links { gap: 12px; font-size: 12px; }
+        }
+
+        @media (max-width: 480px) {
+            nav .links { display: none; }
+        }
+    </style>
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "Pricing — AgentGate",
+        "description": "AgentGate pricing plans for deploying and monetizing AI agents.",
+        "url": "https://agentgate.sh/pricing",
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "AgentGate",
+            "url": "https://agentgate.sh"
+        }
+    }
+    </script>
+</head>
+<body>
+
+<nav>
+    <div class="container">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/#how-it-works">How It Works</a>
+            <a href="/#features">Features</a>
+            <a href="/pricing" class="active">Pricing</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            <a href="/guide">Docs</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <div class="page-header">
+        <div class="container">
+            <h1>Simple, transparent pricing</h1>
+            <p>Start free. Scale as you grow. Only pay for what you need.</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="pricing-grid">
+
+            <!-- Free -->
+            <div class="pricing-card">
+                <h2>Free</h2>
+                <div class="pricing-price">$0 <span class="period">/month</span></div>
+                <p class="pricing-description">Perfect for getting started and experimenting with agent deployment.</p>
+                <ul class="pricing-features">
+                    <li>Up to 5 agents</li>
+                    <li>10 req/s rate limit (burst 20)</li>
+                    <li>3% platform fee on paid agents</li>
+                    <li>Community support</li>
+                    <li>Agent Cards (A2A)</li>
+                    <li>Health monitoring</li>
+                    <li>Invocation logs</li>
+                </ul>
+                <a href="https://github.com/agentgatesh/agentgate" class="btn btn-secondary btn-block">Get Started</a>
+            </div>
+
+            <!-- Pro -->
+            <div class="pricing-card featured">
+                <div class="pricing-badge">Most Popular</div>
+                <h2>Pro</h2>
+                <div class="pricing-price">$49 <span class="period">/month</span></div>
+                <p class="pricing-description">For teams and developers running production agent workloads.</p>
+                <ul class="pricing-features">
+                    <li>Up to 50 agents</li>
+                    <li>100 req/s rate limit (burst 200)</li>
+                    <li>2.5% platform fee</li>
+                    <li>Priority support</li>
+                    <li>SSE streaming + WebSocket</li>
+                    <li>Plugin system</li>
+                    <li>API key rotation</li>
+                </ul>
+                <a href="/billing" class="btn btn-primary btn-block">Upgrade to Pro</a>
+            </div>
+
+            <!-- Enterprise -->
+            <div class="pricing-card">
+                <h2>Enterprise</h2>
+                <div class="pricing-price">Custom</div>
+                <p class="pricing-description">For organizations that need maximum scale and dedicated support.</p>
+                <ul class="pricing-features">
+                    <li>Up to 500 agents</li>
+                    <li>1000 req/s rate limit (burst 2000)</li>
+                    <li>2% platform fee</li>
+                    <li>Dedicated support + SLA</li>
+                    <li>Multi-tenancy (orgs)</li>
+                    <li>Advanced chaining</li>
+                    <li>Custom integrations</li>
+                </ul>
+                <a href="mailto:info@agentgate.sh" class="btn btn-secondary btn-block">Contact Us</a>
+            </div>
+
+        </div>
+
+        <!-- Feature Comparison -->
+        <div class="comparison-section">
+            <h2>Feature Comparison</h2>
+            <p class="subtitle">See what is included in each plan.</p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Free</th>
+                        <th class="highlight">Pro</th>
+                        <th>Enterprise</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Max agents</td>
+                        <td>5</td>
+                        <td>50</td>
+                        <td>500</td>
+                    </tr>
+                    <tr>
+                        <td>Rate limit</td>
+                        <td>10 req/s</td>
+                        <td>100 req/s</td>
+                        <td>1000 req/s</td>
+                    </tr>
+                    <tr>
+                        <td>Burst</td>
+                        <td>20</td>
+                        <td>200</td>
+                        <td>2000</td>
+                    </tr>
+                    <tr>
+                        <td>Platform fee</td>
+                        <td>3%</td>
+                        <td>2.5%</td>
+                        <td>2%</td>
+                    </tr>
+                    <tr>
+                        <td>Agent auth (per-agent keys)</td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>Health monitoring</td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>Webhooks</td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>SSE streaming</td>
+                        <td><span class="dash">--</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>WebSocket</td>
+                        <td><span class="dash">--</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>Plugin system</td>
+                        <td><span class="dash">--</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>Log retention</td>
+                        <td>7 days</td>
+                        <td>30 days</td>
+                        <td>90 days</td>
+                    </tr>
+                    <tr>
+                        <td>Key rotation</td>
+                        <td><span class="dash">--</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                    <tr>
+                        <td>API versioning</td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                        <td><span class="check">Yes</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div class="container">
+        <p>
+            AgentGate &mdash; Open source, built for the agent economy.
+            &nbsp;&middot;&nbsp;
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/dashboard">Dashboard</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/guide">Docs</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/.well-known/agent.json">Agent Discovery</a>
+        </p>
+    </div>
+</footer>
+
+</body>
+</html>

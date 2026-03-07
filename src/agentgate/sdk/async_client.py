@@ -398,6 +398,15 @@ class AsyncAgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    async def change_org_tier(self, org_id: str, tier: str) -> dict:
+        r = await self._client.post(
+            f"{self.server_url}/orgs/{org_id}/tier",
+            json={"tier": tier},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     async def rotate_org_key(self, org_id: str) -> dict:
         r = await self._client.post(
             f"{self.server_url}/orgs/{org_id}/rotate-key",
