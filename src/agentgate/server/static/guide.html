@@ -71,6 +71,7 @@
             <a href="#api-tasks">Task Routing</a>
             <a href="#api-orgs">Organizations</a>
             <a href="#api-billing">Billing</a>
+            <a href="#pricing-tiers">Pricing & Tiers</a>
             <a href="#api-health">Health & Metrics</a>
 
             <div class="section-title">SDK</div>
@@ -84,6 +85,12 @@
             <a href="#rate-limiting">Rate Limiting</a>
             <a href="#webhooks">Webhooks</a>
             <a href="#chaining">Agent Chaining</a>
+
+            <div class="section-title">Monetization</div>
+            <a href="#pricing-tiers">Pricing & Tiers</a>
+            <a href="#wallet-topup">Wallet & Topup</a>
+            <a href="#transactions">Transactions</a>
+            <a href="#billing-flow">Billing Flow</a>
         </nav>
     </div>
 
@@ -333,6 +340,78 @@ response = httpx.post(
     json={"id": "sub-1", "message": {"parts": [{"type": "text", "text": "5 + 3"}]}}
 )
 result = response.json()</code></pre>
+
+        <h2 id="pricing-tiers">Pricing & Tiers</h2>
+        <p>AgentGate supports three organization tiers with different limits and platform fees:</p>
+        <table>
+            <tr><th>Feature</th><th>Free</th><th>Pro</th><th>Enterprise</th></tr>
+            <tr><td>Max Agents</td><td>5</td><td>50</td><td>500</td></tr>
+            <tr><td>Rate Limit</td><td>10 req/s</td><td>100 req/s</td><td>1,000 req/s</td></tr>
+            <tr><td>Platform Fee</td><td>3%</td><td>2.5%</td><td>2%</td></tr>
+        </table>
+        <p>Agents can set a <code>price_per_task</code> when registering. When a task is routed to a paid agent, the caller's org balance is automatically charged.</p>
+
+        <h3><span class="tag post">POST</span> /orgs/{id}/tier</h3>
+        <p>Change an organization's tier. Admin or org owner.</p>
+<pre><code>curl -X POST https://agentgate.sh/orgs/ORG_ID/tier \
+  -H "Authorization: Bearer KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tier": "pro"}'</code></pre>
+
+        <h2 id="wallet-topup">Wallet & Topup</h2>
+        <p>Each organization has a wallet balance. Funds must be added before using paid agents.</p>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}/wallet</h3>
+        <p>Get wallet balance, tier info, and agent count. Admin or org owner.</p>
+
+        <h3><span class="tag post">POST</span> /orgs/{id}/topup</h3>
+        <p>Add funds to an organization's wallet.</p>
+<pre><code>curl -X POST https://agentgate.sh/orgs/ORG_ID/topup \
+  -H "Authorization: Bearer KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"amount": 100.0}'</code></pre>
+
+        <h2 id="transactions">Transactions</h2>
+        <p>Every paid task creates a transaction record in the ledger.</p>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}/transactions</h3>
+        <p>List transactions. Filter by <code>role=payer|receiver|all</code>. Supports <code>limit</code> and <code>offset</code>.</p>
+
+        <h3><span class="tag get">GET</span> /orgs/{id}/transactions/summary</h3>
+        <p>Get aggregated totals: spent, earned, fees, transaction counts.</p>
+
+        <h2 id="billing-flow">Billing Flow</h2>
+        <p>When a task is routed to a paid agent:</p>
+        <ol>
+            <li><strong>Balance check</strong> — If the caller org has insufficient balance, returns HTTP 402.</li>
+            <li><strong>Task execution</strong> — The task is forwarded to the agent via A2A protocol.</li>
+            <li><strong>Charge</strong> — On success, the payer org is charged <code>price_per_task</code>.</li>
+            <li><strong>Credit</strong> — The agent owner org receives the amount minus the platform fee.</li>
+            <li><strong>Ledger</strong> — A transaction record is created with amount, fee, and net.</li>
+        </ol>
+        <p>If the agent is unreachable or returns an error, no charge is made.</p>
+
+        <h3>SDK: Wallet & Transactions</h3>
+<pre><code>from agentgate import AgentGateClient
+
+client = AgentGateClient("https://agentgate.sh", api_key="KEY")
+
+# Check wallet
+wallet = client.get_org_wallet("org-id")
+print(f"Balance: ${wallet['balance']}")
+
+# Add funds
+client.topup_org("org-id", amount=50.0)
+
+# List transactions
+txns = client.list_org_transactions("org-id", role="payer")
+
+# Transaction summary
+summary = client.get_org_transaction_summary("org-id")
+print(f"Spent: ${summary['total_spent']}")
+
+# Change tier
+client.change_org_tier("org-id", "pro")</code></pre>
 
         <p style="margin-top: 3rem; color: var(--text-secondary); font-size: 0.85rem;">
             AgentGate is open source.

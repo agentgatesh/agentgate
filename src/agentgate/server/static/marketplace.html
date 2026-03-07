@@ -168,6 +168,10 @@
         }
         .card-skills strong { color: var(--text); }
 
+        .card-price { font-size: 13px; margin-bottom: 12px; font-weight: 600; }
+        .card-price .free { color: var(--text-muted); font-weight: 400; }
+        .card-price .paid { color: var(--green); }
+
         .card-footer {
             display: flex;
             justify-content: space-between;
@@ -222,6 +226,7 @@
             <a href="/">Home</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/dashboard">Dashboard</a>
+            <a href="/pricing">Pricing</a>
             <a href="/guide">Docs</a>
         </nav>
     </div>
@@ -237,6 +242,8 @@
             <select id="sort">
                 <option value="newest">Newest</option>
                 <option value="name">Name A-Z</option>
+                <option value="price-low">Price: Low-High</option>
+                <option value="price-high">Price: High-Low</option>
             </select>
         </div>
 
@@ -301,7 +308,9 @@
         function renderStats() {
             const el = document.getElementById('stats-row');
             const tags = getAllTags();
+            const paidCount = allAgents.filter(a => a.price_per_task > 0).length;
             el.innerHTML = '<span><strong>' + allAgents.length + '</strong> agents</span>' +
+                '<span><strong>' + paidCount + '</strong> paid</span>' +
                 '<span><strong>' + tags.length + '</strong> tags</span>';
         }
 
@@ -326,6 +335,10 @@
 
             if (sort === 'name') {
                 filtered.sort((a, b) => a.name.localeCompare(b.name));
+            } else if (sort === 'price-low') {
+                filtered.sort((a, b) => (a.price_per_task || 0) - (b.price_per_task || 0));
+            } else if (sort === 'price-high') {
+                filtered.sort((a, b) => (b.price_per_task || 0) - (a.price_per_task || 0));
             }
 
             if (filtered.length === 0) {
@@ -356,6 +369,11 @@
                     (tags ? '<div class="card-tags">' + tags + '</div>' : '') +
                     (skills ? '<div class="card-skills"><strong>Skills:</strong> ' +
                         skills + extra + '</div>' : '') +
+                    '<div class="card-price">' +
+                        (a.price_per_task > 0
+                            ? '<span class="paid">$' + a.price_per_task.toFixed(2) + '/task</span>'
+                            : '<span class="free">Free</span>') +
+                    '</div>' +
                     '<div class="card-footer">' +
                         '<div class="card-status">' +
                             '<span class="dot ' + statusClass + '"></span>' +
