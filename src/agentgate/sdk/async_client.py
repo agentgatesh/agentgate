@@ -38,11 +38,21 @@ class AsyncAgentGateClient:
 
     # --- Registry operations ---
 
-    async def list_agents(self, skill: str | None = None) -> list[dict]:
+    async def list_agents(
+        self, skill: str | None = None, tag: str | None = None,
+    ) -> list[dict]:
         params = {}
         if skill:
             params["skill"] = skill
+        if tag:
+            params["tag"] = tag
         r = await self._client.get(f"{self.server_url}/agents/", params=params)
+        self._raise_for_status(r)
+        return r.json()
+
+    async def list_tags(self) -> dict:
+        """List all unique agent tags with counts."""
+        r = await self._client.get(f"{self.server_url}/agents/tags")
         self._raise_for_status(r)
         return r.json()
 
@@ -245,6 +255,22 @@ class AsyncAgentGateClient:
     async def get_org_billing_breakdown(self, org_id: str) -> dict:
         r = await self._client.get(
             f"{self.server_url}/orgs/{org_id}/billing/breakdown",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def rotate_org_key(self, org_id: str) -> dict:
+        r = await self._client.post(
+            f"{self.server_url}/orgs/{org_id}/rotate-key",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    async def confirm_org_key_rotation(self, org_id: str) -> dict:
+        r = await self._client.post(
+            f"{self.server_url}/orgs/{org_id}/confirm-rotation",
             headers=self._headers(auth=True),
         )
         self._raise_for_status(r)

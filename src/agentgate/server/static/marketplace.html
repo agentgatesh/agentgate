@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentGate Marketplace</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent); text-decoration: none; }
+
+        .topbar {
+            border-bottom: 1px solid var(--border);
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .topbar .logo { font-size: 18px; font-weight: 700; }
+        .topbar .logo span { color: var(--accent); }
+        .topbar nav { display: flex; gap: 20px; font-size: 14px; }
+        .topbar nav a { color: var(--text-muted); }
+        .topbar nav a:hover { color: var(--text); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+        .hero {
+            text-align: center;
+            padding: 40px 0 32px;
+        }
+        .hero h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+        .hero p { color: var(--text-muted); font-size: 15px; max-width: 500px; margin: 0 auto; }
+
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            max-width: 600px;
+            margin: 24px auto 0;
+        }
+        .search-bar input {
+            flex: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+        }
+        .search-bar input:focus { border-color: var(--accent); }
+        .search-bar select {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text);
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .tags-bar {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+        .tag-btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 4px 14px;
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .tag-btn:hover, .tag-btn.active {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            margin: 24px 0;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+        .stats-row strong { color: var(--text); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            transition: border-color 0.15s;
+        }
+        .card:hover { border-color: var(--accent); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        .card-name { font-size: 16px; font-weight: 600; }
+        .card-version {
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .card-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            line-height: 1.5;
+            min-height: 40px;
+        }
+
+        .card-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .card-tag {
+            font-size: 11px;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .card-skills {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        .card-skills strong { color: var(--text); }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+        .card-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot.green { background: var(--green); }
+        .dot.red { background: var(--red); }
+        .dot.gray { background: var(--text-muted); }
+
+        .card-action {
+            font-size: 12px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 14px;
+            cursor: pointer;
+        }
+        .card-action:hover { background: var(--accent-hover); }
+
+        .empty {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 60px 0;
+            font-size: 15px;
+        }
+
+        @media (max-width: 640px) {
+            .grid { grid-template-columns: 1fr; }
+            .search-bar { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="logo">Agent<span>Gate</span></div>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/marketplace">Marketplace</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/guide">Docs</a>
+        </nav>
+    </div>
+
+    <div class="container">
+        <div class="hero">
+            <h1>Agent Marketplace</h1>
+            <p>Discover and connect with AI agents. Browse available agents, check their capabilities, and integrate them into your workflows.</p>
+        </div>
+
+        <div class="search-bar">
+            <input type="text" id="search" placeholder="Search agents by name, skill, or tag...">
+            <select id="sort">
+                <option value="newest">Newest</option>
+                <option value="name">Name A-Z</option>
+            </select>
+        </div>
+
+        <div class="tags-bar" id="tags-bar"></div>
+
+        <div class="stats-row" id="stats-row"></div>
+
+        <div class="grid" id="agents-grid">
+            <div class="empty">Loading agents...</div>
+        </div>
+    </div>
+
+    <script>
+        let allAgents = [];
+        let allHealth = {};
+        let activeTag = null;
+
+        async function loadAgents() {
+            try {
+                const [agentsRes, healthRes] = await Promise.all([
+                    fetch('/agents/'),
+                    fetch('/health/agents').catch(() => ({ ok: false })),
+                ]);
+                allAgents = await agentsRes.json();
+                if (healthRes.ok) {
+                    allHealth = await healthRes.json();
+                }
+            } catch {
+                allAgents = [];
+            }
+            renderTags();
+            renderStats();
+            renderGrid();
+        }
+
+        function getAllTags() {
+            const tags = new Set();
+            allAgents.forEach(a => {
+                (a.tags || []).forEach(t => tags.add(t));
+            });
+            return [...tags].sort();
+        }
+
+        function renderTags() {
+            const tags = getAllTags();
+            const bar = document.getElementById('tags-bar');
+            if (tags.length === 0) { bar.innerHTML = ''; return; }
+            bar.innerHTML = '<button class="tag-btn' + (!activeTag ? ' active' : '') +
+                '" onclick="filterTag(null)">All</button>' +
+                tags.map(t =>
+                    '<button class="tag-btn' + (activeTag === t ? ' active' : '') +
+                    '" onclick="filterTag(\'' + t + '\')">' + t + '</button>'
+                ).join('');
+        }
+
+        function filterTag(tag) {
+            activeTag = tag;
+            renderTags();
+            renderGrid();
+        }
+
+        function renderStats() {
+            const el = document.getElementById('stats-row');
+            const tags = getAllTags();
+            el.innerHTML = '<span><strong>' + allAgents.length + '</strong> agents</span>' +
+                '<span><strong>' + tags.length + '</strong> tags</span>';
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('agents-grid');
+            const query = document.getElementById('search').value.toLowerCase();
+            const sort = document.getElementById('sort').value;
+
+            let filtered = allAgents.filter(a => {
+                const matchesSearch = !query ||
+                    a.name.toLowerCase().includes(query) ||
+                    (a.description || '').toLowerCase().includes(query) ||
+                    (a.skills || []).some(s =>
+                        (s.name || '').toLowerCase().includes(query) ||
+                        (s.id || '').toLowerCase().includes(query)
+                    ) ||
+                    (a.tags || []).some(t => t.toLowerCase().includes(query));
+                const matchesTag = !activeTag ||
+                    (a.tags || []).includes(activeTag);
+                return matchesSearch && matchesTag;
+            });
+
+            if (sort === 'name') {
+                filtered.sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="empty">No agents found.</div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.map(a => {
+                const h = allHealth[a.id] || {};
+                const statusClass = h.status === 'healthy' ? 'green' :
+                    h.status === 'unhealthy' ? 'red' : 'gray';
+                const statusText = h.status || 'unknown';
+                const tags = (a.tags || []).map(t =>
+                    '<span class="card-tag">' + t + '</span>'
+                ).join('');
+                const skills = (a.skills || []).slice(0, 3).map(s =>
+                    s.name || s.id
+                ).join(', ');
+                const extra = (a.skills || []).length > 3 ?
+                    ' +' + ((a.skills || []).length - 3) + ' more' : '';
+
+                return '<div class="card">' +
+                    '<div class="card-header">' +
+                        '<div class="card-name">' + a.name + '</div>' +
+                        '<div class="card-version">v' + a.version + '</div>' +
+                    '</div>' +
+                    '<div class="card-desc">' + (a.description || 'No description') + '</div>' +
+                    (tags ? '<div class="card-tags">' + tags + '</div>' : '') +
+                    (skills ? '<div class="card-skills"><strong>Skills:</strong> ' +
+                        skills + extra + '</div>' : '') +
+                    '<div class="card-footer">' +
+                        '<div class="card-status">' +
+                            '<span class="dot ' + statusClass + '"></span>' +
+                            statusText +
+                        '</div>' +
+                        '<button class="card-action" onclick="viewAgent(\'' +
+                            a.id + '\')">View Card</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        }
+
+        function viewAgent(id) {
+            window.open('/agents/' + id + '/card', '_blank');
+        }
+
+        document.getElementById('search').addEventListener('input', renderGrid);
+        document.getElementById('sort').addEventListener('change', renderGrid);
+        loadAgents();
+    </script>
+</body>
+</html>

@@ -89,6 +89,7 @@ def test_register_agent(test_client, auth_headers):
             "description": "E2E test agent",
             "version": "1.0.0",
             "skills": [{"id": "test", "name": "Test Skill"}],
+            "tags": ["test", "e2e"],
         },
         headers=auth_headers,
     )
@@ -96,6 +97,7 @@ def test_register_agent(test_client, auth_headers):
     data = r.json()
     assert data["name"] == "integration-test-agent"
     assert data["version"] == "1.0.0"
+    assert data["tags"] == ["test", "e2e"]
     assert data["id"]
 
 
@@ -324,6 +326,74 @@ def test_metrics_requires_auth(test_client):
 def test_metrics_with_auth(test_client, auth_headers):
     r = test_client.get("/metrics", headers=auth_headers)
     assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Marketplace
+# ---------------------------------------------------------------------------
+
+
+def test_marketplace_page(test_client):
+    r = test_client.get("/marketplace")
+    assert r.status_code == 200
+    assert "Marketplace" in r.text
+
+
+# ---------------------------------------------------------------------------
+# Agent tags
+# ---------------------------------------------------------------------------
+
+
+def test_list_agents_by_tag(test_client):
+    r = test_client.get("/agents/?tag=e2e")
+    assert r.status_code == 200
+    agents = r.json()
+    assert any(a["name"] == "integration-test-agent" for a in agents)
+
+
+def test_list_agents_tag_no_match(test_client):
+    r = test_client.get("/agents/?tag=nonexistent-tag-xyz")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_tags_endpoint(test_client):
+    r = test_client.get("/agents/tags")
+    assert r.status_code == 200
+    data = r.json()
+    assert "tags" in data
+    tag_names = [t["name"] for t in data["tags"]]
+    assert "test" in tag_names
+    assert "e2e" in tag_names
+
+
+# ---------------------------------------------------------------------------
+# API key rotation
+# ---------------------------------------------------------------------------
+
+
+def test_rotate_org_key(test_client, auth_headers):
+    r = test_client.get("/orgs/", headers=auth_headers)
+    org = next(o for o in r.json() if o["name"] == "test-org")
+
+    r2 = test_client.post(
+        f"/orgs/{org['id']}/rotate-key", headers=auth_headers,
+    )
+    assert r2.status_code == 200
+    data = r2.json()
+    assert "new_api_key" in data
+    assert data["status"] == "pending_confirmation"
+
+
+def test_confirm_key_rotation(test_client, auth_headers):
+    r = test_client.get("/orgs/", headers=auth_headers)
+    org = next(o for o in r.json() if o["name"] == "test-org")
+
+    r2 = test_client.post(
+        f"/orgs/{org['id']}/confirm-rotation", headers=auth_headers,
+    )
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "rotation_confirmed"
 
 
 # ---------------------------------------------------------------------------
