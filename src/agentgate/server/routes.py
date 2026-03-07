@@ -349,19 +349,33 @@ async def agent_health(agent_id: uuid.UUID):
     return {"agent": agent.name, **health}
 
 
-@router.get("/{agent_id}/card", response_model=AgentCard)
+@router.get("/{agent_id}/card")
 async def get_agent_card(agent_id: uuid.UUID):
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
-        return AgentCard(
+        card = AgentCard(
             name=agent.name,
             description=agent.description,
             url=agent.url,
             version=agent.version,
             skills=agent.skills,
-        )
+        ).model_dump()
+
+        # Add UCP checkout capability for paid agents
+        if agent.price_per_task > 0:
+            from agentgate.server.ucp_routes import UCP_VERSION
+
+            card["ucp"] = {
+                "version": UCP_VERSION,
+                "capabilities": ["dev.ucp.shopping.checkout"],
+                "price_per_task": agent.price_per_task,
+                "currency": "USD",
+                "checkout_url": "https://agentgate.sh/ucp/checkout",
+            }
+
+        return card
 
 
 @router.get("/{agent_id}/logs")
@@ -850,7 +864,24 @@ async def route_task(
         },
     )
 
-    return resp.json()
+    result = resp.json()
+
+    # Attach UCP metadata for paid agents
+    if agent.price_per_task > 0:
+        from agentgate.server.ucp_routes import UCP_VERSION
+
+        result = {
+            "result": result,
+            "ucp": {
+                "version": UCP_VERSION,
+                "capability": "dev.ucp.shopping.checkout",
+                "agent_id": str(agent_id),
+                "price_per_task": agent.price_per_task,
+                "currency": "USD",
+            },
+        }
+
+    return result
 
 
 @router.post("/{agent_id}/task/stream")

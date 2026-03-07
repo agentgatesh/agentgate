@@ -91,6 +91,11 @@
             <a href="#wallet-topup">Wallet & Topup</a>
             <a href="#transactions">Transactions</a>
             <a href="#billing-flow">Billing Flow</a>
+
+            <div class="section-title">UCP Integration</div>
+            <a href="#ucp-discovery">Discovery</a>
+            <a href="#ucp-catalog">Catalog</a>
+            <a href="#ucp-checkout">Checkout</a>
         </nav>
     </div>
 
@@ -412,6 +417,41 @@ print(f"Spent: ${summary['total_spent']}")
 
 # Change tier
 client.change_org_tier("org-id", "pro")</code></pre>
+
+        <h2 id="ucp-discovery">UCP Discovery</h2>
+        <p>AgentGate implements the <strong>Universal Commerce Protocol (UCP)</strong> by Google + Shopify for agentic commerce. The UCP profile is available at:</p>
+        <h3><span class="tag get">GET</span> /.well-known/ucp</h3>
+        <p>Returns the UCP discovery profile with supported services, capabilities, and payment methods.</p>
+<pre><code>curl https://agentgate.sh/.well-known/ucp</code></pre>
+        <p>Response includes <code>dev.ucp.shopping</code> service with <code>checkout</code> and <code>catalog</code> capabilities.</p>
+
+        <h2 id="ucp-catalog">UCP Catalog</h2>
+        <p>Browse paid agents as UCP products.</p>
+        <h3><span class="tag get">GET</span> /ucp/catalog</h3>
+<pre><code>curl https://agentgate.sh/ucp/catalog</code></pre>
+        <p>Returns a list of paid agents with their prices, descriptions, and tags in UCP product format.</p>
+
+        <h2 id="ucp-checkout">UCP Checkout</h2>
+        <p>UCP checkout sessions provide a standard commerce flow for paid agent tasks.</p>
+
+        <h3><span class="tag post">POST</span> /ucp/checkout</h3>
+        <p>Create a checkout session for a paid agent task.</p>
+<pre><code>curl -X POST https://agentgate.sh/ucp/checkout \
+  -H "Authorization: Bearer ORG_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_id": "AGENT_ID",
+    "task": {"id": "t1", "message": {"parts": [{"type": "text", "text": "hello"}]}}
+  }'</code></pre>
+
+        <h3><span class="tag get">GET</span> /ucp/checkout/{session_id}</h3>
+        <p>Get the status of a checkout session.</p>
+
+        <h3><span class="tag post">POST</span> /ucp/checkout/{session_id}/complete</h3>
+        <p>Complete the checkout: executes the A2A task, processes billing, and returns the result.</p>
+        <p>The checkout flow: <strong>Create session</strong> (pre-check balance) &rarr; <strong>Complete</strong> (task + billing) &rarr; <strong>Result</strong> (with transaction ID).</p>
+
+        <p>Paid agent cards also include UCP capability metadata, making them discoverable by UCP-compatible agents.</p>
 
         <p style="margin-top: 3rem; color: var(--text-secondary); font-size: 0.85rem;">
             AgentGate is open source.
