@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 import uuid
@@ -94,6 +95,38 @@ async def list_agents(skill: str | None = None):
                 )
             ]
         return agents
+
+
+@router.get("/by-name/{name}", response_model=list[AgentResponse])
+async def get_agent_versions(
+    name: str,
+    version: str | None = Query(default=None),
+):
+    """Get all versions of an agent by name. Optionally filter by version."""
+    async with async_session() as session:
+        query = select(Agent).where(Agent.name == name).order_by(Agent.created_at.desc())
+        if version:
+            query = select(Agent).where(
+                Agent.name == name, Agent.version == version,
+            ).order_by(Agent.created_at.desc())
+        result = await session.execute(query)
+        agents = result.scalars().all()
+        if not agents:
+            raise HTTPException(status_code=404, detail="No agents found with this name")
+        return agents
+
+
+@router.get("/by-name/{name}/latest", response_model=AgentResponse)
+async def get_agent_latest(name: str):
+    """Get the latest version of an agent by name (most recently created)."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Agent).where(Agent.name == name).order_by(Agent.created_at.desc()).limit(1)
+        )
+        agent = result.scalar_one_or_none()
+        if not agent:
+            raise HTTPException(status_code=404, detail="No agent found with this name")
+        return agent
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
@@ -304,14 +337,30 @@ async def get_agent_usage_breakdown(
     }
 
 
-async def _fire_webhook(webhook_url: str, payload: dict):
-    """Fire-and-forget webhook notification."""
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(webhook_url, json=payload)
-        logger.info("Webhook sent to %s", webhook_url)
-    except Exception:
-        logger.warning("Webhook failed for %s", webhook_url)
+async def _fire_webhook(
+    webhook_url: str, payload: dict, max_retries: int = 3,
+):
+    """Fire webhook with exponential backoff retry."""
+    for attempt in range(max_retries):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(webhook_url, json=payload)
+            if resp.status_code < 500:
+                logger.info("Webhook sent to %s (attempt %d)", webhook_url, attempt + 1)
+                return
+            logger.warning(
+                "Webhook %s returned %d (attempt %d/%d)",
+                webhook_url, resp.status_code, attempt + 1, max_retries,
+            )
+        except Exception:
+            logger.warning(
+                "Webhook failed for %s (attempt %d/%d)",
+                webhook_url, attempt + 1, max_retries,
+            )
+        if attempt < max_retries - 1:
+            delay = 2 ** attempt  # 1s, 2s, 4s
+            await asyncio.sleep(delay)
+    logger.error("Webhook exhausted retries for %s", webhook_url)
 
 
 async def _save_task_log(

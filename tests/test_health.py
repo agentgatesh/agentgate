@@ -99,6 +99,7 @@ def _mock_async_session_with_agents(agents):
     """Create a mock async_session that returns the given agents."""
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = agents
+    mock_result.scalar_one_or_none.return_value = agents[0] if agents else None
 
     mock_session = AsyncMock()
     mock_session.execute.return_value = mock_result
@@ -1390,3 +1391,178 @@ def test_register_agent_with_admin_key():
             headers={"Authorization": "Bearer admin-key"},
         )
     assert response.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# API versioning — /v1/ prefix
+# ---------------------------------------------------------------------------
+
+
+def test_v1_health():
+    response = client.get("/v1/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+
+
+def test_v1_agents_list():
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/v1/agents/")
+    assert response.status_code == 200
+
+
+def test_v1_health_agents():
+    response = client.get("/v1/health/agents")
+    assert response.status_code == 200
+
+
+def test_v1_orgs_requires_auth():
+    response = client.get("/v1/orgs/")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Webhook retry — _fire_webhook with retries
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_retry_on_failure():
+    """_fire_webhook should retry on failure with backoff."""
+    from agentgate.server.routes import _fire_webhook
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    call_count = 0
+
+    async def mock_post(url, json=None):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise ConnectionError("fail")
+        return mock_response
+
+    mock_client = AsyncMock()
+    mock_client.post = mock_post
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("agentgate.server.routes.httpx.AsyncClient", return_value=mock_client):
+        with patch("agentgate.server.routes.asyncio.sleep", new_callable=AsyncMock):
+            await _fire_webhook("http://example.com/hook", {"event": "test"})
+
+    assert call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_webhook_retry_success_first_try():
+    """_fire_webhook should not retry on first success."""
+    from agentgate.server.routes import _fire_webhook
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("agentgate.server.routes.httpx.AsyncClient", return_value=mock_client):
+        await _fire_webhook("http://example.com/hook", {"event": "test"})
+
+    mock_client.post.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_webhook_retry_exhausted():
+    """_fire_webhook should exhaust retries on persistent failure."""
+    from agentgate.server.routes import _fire_webhook
+
+    mock_client = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=ConnectionError("fail"))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("agentgate.server.routes.httpx.AsyncClient", return_value=mock_client):
+        with patch("agentgate.server.routes.asyncio.sleep", new_callable=AsyncMock):
+            await _fire_webhook("http://example.com/hook", {"event": "test"}, max_retries=3)
+
+    assert mock_client.post.call_count == 3
+
+
+# ---------------------------------------------------------------------------
+# Agent versioning — by-name endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_agent_versions_endpoint_not_found():
+    """by-name with non-existent name returns 404."""
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/by-name/nonexistent")
+    assert response.status_code == 404
+
+
+def test_agent_latest_endpoint_not_found():
+    """by-name/latest with non-existent name returns 404."""
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/by-name/nonexistent/latest")
+    assert response.status_code == 404
+
+
+def test_agent_versions_endpoint_exists():
+    """GET /agents/by-name/{name} endpoint exists."""
+    from agentgate.server.routes import get_agent_versions
+
+    assert get_agent_versions is not None
+
+
+def test_agent_latest_endpoint_exists():
+    """GET /agents/by-name/{name}/latest endpoint exists."""
+    from agentgate.server.routes import get_agent_latest
+
+    assert get_agent_latest is not None
+
+
+# ---------------------------------------------------------------------------
+# SDK versioning methods
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_sync_versioning_methods():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "get_agent_versions")
+    assert hasattr(c, "get_agent_latest")
+    c.close()
+
+
+def test_sdk_async_versioning_methods():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "get_agent_versions")
+    assert hasattr(c, "get_agent_latest")
+
+
+# ---------------------------------------------------------------------------
+# E2E test file exists
+# ---------------------------------------------------------------------------
+
+
+def test_integration_test_file_exists():
+    from pathlib import Path
+
+    test_file = Path(__file__).parent / "test_integration.py"
+    assert test_file.exists()
+
+
+def test_docker_compose_test_exists():
+    from pathlib import Path
+
+    compose_file = Path(__file__).parent.parent / "docker-compose.test.yml"
+    assert compose_file.exists()
