@@ -180,6 +180,96 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    # --- Organization management ---
+
+    def create_org(
+        self,
+        name: str,
+        api_key: str,
+        cost_per_invocation: float = 0.001,
+        rate_limit: float = 10.0,
+        rate_burst: int = 20,
+        billing_alert_threshold: float | None = None,
+    ) -> dict:
+        """Create an organization. Requires admin API key."""
+        payload: dict = {
+            "name": name, "api_key": api_key,
+            "cost_per_invocation": cost_per_invocation,
+            "rate_limit": rate_limit, "rate_burst": rate_burst,
+        }
+        if billing_alert_threshold is not None:
+            payload["billing_alert_threshold"] = billing_alert_threshold
+        r = self._client.post(
+            f"{self.server_url}/orgs/", json=payload,
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_orgs(self) -> list[dict]:
+        """List all organizations. Requires admin API key."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_org(self, org_id: str) -> dict:
+        """Get an organization by ID."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def update_org(self, org_id: str, **fields) -> dict:
+        """Update an organization."""
+        r = self._client.put(
+            f"{self.server_url}/orgs/{org_id}", json=fields,
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def delete_org(self, org_id: str) -> None:
+        """Delete an organization. Requires admin API key."""
+        r = self._client.delete(
+            f"{self.server_url}/orgs/{org_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+
+    def list_org_agents(self, org_id: str) -> list[dict]:
+        """List agents belonging to an organization."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}/agents",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_org_billing(self, org_id: str) -> dict:
+        """Get billing summary for an organization."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}/billing",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_org_billing_breakdown(self, org_id: str) -> dict:
+        """Get daily billing breakdown for an organization."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}/billing/breakdown",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    # --- Discovery & Health ---
+
     def discover(self) -> dict:
         """Get the .well-known/agent.json discovery document."""
         r = self._client.get(f"{self.server_url}/.well-known/agent.json")

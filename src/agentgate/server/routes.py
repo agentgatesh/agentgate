@@ -10,10 +10,10 @@ from sqlalchemy.types import Date
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import Agent, TaskLog
+from agentgate.db.models import Agent, Organization, TaskLog
 from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
-from agentgate.server.ratelimit import task_limiter
+from agentgate.server.ratelimit import RateLimiter, task_limiter
 from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse, AgentUpdate
 
 logger = logging.getLogger("agentgate.routing")
@@ -30,16 +30,36 @@ def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_sc
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+async def verify_api_key_or_org(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+) -> Organization | None:
+    """Check admin key or org key. Returns org if org-scoped, None if admin."""
+    if settings.api_key and credentials.credentials == settings.api_key:
+        return None  # Admin
+    # Try org key
+    key_hash = _hash_api_key(credentials.credentials)
+    async with async_session() as session:
+        result = await session.execute(
+            select(Organization).where(Organization.api_key_hash == key_hash)
+        )
+        org = result.scalar_one_or_none()
+        if org:
+            return org
+    raise HTTPException(status_code=401, detail="Invalid API key")
+
+
 def _hash_api_key(key: str) -> str:
     """Hash an API key with SHA-256."""
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-@router.post(
-    "/", response_model=AgentResponse, status_code=201,
-    dependencies=[Depends(verify_api_key)],
-)
-async def register_agent(data: AgentCreate):
+@router.post("/", response_model=AgentResponse, status_code=201)
+async def register_agent(
+    data: AgentCreate,
+    caller_org: Organization | None = Depends(verify_api_key_or_org),
+):
+    # If org key is used, force org_id to the caller's org
+    org_id = caller_org.id if caller_org else data.org_id
     async with async_session() as session:
         agent = Agent(
             name=data.name,
@@ -48,7 +68,7 @@ async def register_agent(data: AgentCreate):
             version=data.version,
             skills=data.skills,
             webhook_url=data.webhook_url,
-            org_id=data.org_id,
+            org_id=org_id,
             api_key_hash=_hash_api_key(data.agent_api_key) if data.agent_api_key else None,
         )
         session.add(agent)
@@ -85,17 +105,20 @@ async def get_agent(agent_id: uuid.UUID):
         return agent
 
 
-@router.put(
-    "/{agent_id}", response_model=AgentResponse,
-    dependencies=[Depends(verify_api_key)],
-)
-async def update_agent(agent_id: uuid.UUID, data: AgentUpdate):
+@router.put("/{agent_id}", response_model=AgentResponse)
+async def update_agent(
+    agent_id: uuid.UUID,
+    data: AgentUpdate,
+    caller_org: Organization | None = Depends(verify_api_key_or_org),
+):
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+        # Org can only update its own agents
+        if caller_org and agent.org_id != caller_org.id:
+            raise HTTPException(status_code=403, detail="Access denied to this agent")
         update_data = data.model_dump(exclude_none=True)
-        # Hash agent_api_key if provided
         if "agent_api_key" in update_data:
             key = update_data.pop("agent_api_key")
             if key:
@@ -109,12 +132,17 @@ async def update_agent(agent_id: uuid.UUID, data: AgentUpdate):
         return agent
 
 
-@router.delete("/{agent_id}", status_code=204, dependencies=[Depends(verify_api_key)])
-async def delete_agent(agent_id: uuid.UUID):
+@router.delete("/{agent_id}", status_code=204)
+async def delete_agent(
+    agent_id: uuid.UUID,
+    caller_org: Organization | None = Depends(verify_api_key_or_org),
+):
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+        if caller_org and agent.org_id != caller_org.id:
+            raise HTTPException(status_code=403, detail="Access denied to this agent")
         await session.delete(agent)
         await session.commit()
 
@@ -146,17 +174,20 @@ async def get_agent_card(agent_id: uuid.UUID):
         )
 
 
-@router.get("/{agent_id}/logs", dependencies=[Depends(verify_api_key)])
+@router.get("/{agent_id}/logs")
 async def get_agent_logs(
     agent_id: uuid.UUID,
+    caller_org: Organization | None = Depends(verify_api_key_or_org),
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
 ):
-    """Get invocation logs for an agent. Requires API key."""
+    """Get invocation logs for an agent. Requires API key (admin or org)."""
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+        if caller_org and agent.org_id != caller_org.id:
+            raise HTTPException(status_code=403, detail="Access denied to this agent")
         query = (
             select(TaskLog)
             .where(TaskLog.agent_id == agent_id)
@@ -182,13 +213,18 @@ async def get_agent_logs(
     ]
 
 
-@router.get("/{agent_id}/usage", dependencies=[Depends(verify_api_key)])
-async def get_agent_usage(agent_id: uuid.UUID):
-    """Get usage stats for an agent. Requires API key."""
+@router.get("/{agent_id}/usage")
+async def get_agent_usage(
+    agent_id: uuid.UUID,
+    caller_org: Organization | None = Depends(verify_api_key_or_org),
+):
+    """Get usage stats for an agent. Requires API key (admin or org)."""
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+        if caller_org and agent.org_id != caller_org.id:
+            raise HTTPException(status_code=403, detail="Access denied to this agent")
         result = await session.execute(
             select(
                 func.count(TaskLog.id).label("total_invocations"),
@@ -208,19 +244,22 @@ async def get_agent_usage(agent_id: uuid.UUID):
     }
 
 
-@router.get("/{agent_id}/usage/breakdown", dependencies=[Depends(verify_api_key)])
+@router.get("/{agent_id}/usage/breakdown")
 async def get_agent_usage_breakdown(
     agent_id: uuid.UUID,
+    caller_org: Organization | None = Depends(verify_api_key_or_org),
     period: str = Query(default="day", pattern="^(day|month)$"),
     days: int = Query(default=30, ge=1, le=365),
 ):
-    """Get usage breakdown by day or month. Requires API key."""
+    """Get usage breakdown by day or month. Requires API key (admin or org)."""
     from datetime import datetime, timedelta, timezone
 
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+        if caller_org and agent.org_id != caller_org.id:
+            raise HTTPException(status_code=403, detail="Access denied to this agent")
 
         since = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -316,13 +355,26 @@ async def route_task(
     If the agent has a webhook_url configured, a notification is sent in the background.
     """
     client_ip = request.client.host if request.client else "unknown"
-    if not task_limiter.allow(client_ip):
-        raise HTTPException(status_code=429, detail="Too many requests")
 
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
+
+        # Per-org rate limiting (if agent belongs to an org)
+        if agent.org_id:
+            org = await session.get(Organization, agent.org_id)
+            if org:
+                org_limiter = RateLimiter(rate=org.rate_limit, burst=org.rate_burst)
+                org_key = f"org:{org.id}:{client_ip}"
+                if not org_limiter.allow(org_key):
+                    raise HTTPException(status_code=429, detail="Too many requests")
+            else:
+                if not task_limiter.allow(client_ip):
+                    raise HTTPException(status_code=429, detail="Too many requests")
+        else:
+            if not task_limiter.allow(client_ip):
+                raise HTTPException(status_code=429, detail="Too many requests")
 
     # Per-agent auth check
     if agent.api_key_hash:

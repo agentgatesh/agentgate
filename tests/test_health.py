@@ -67,12 +67,27 @@ def test_register_agent_no_auth():
 
 
 def test_register_agent_wrong_key():
-    response = client.post(
-        "/agents/",
-        json={"name": "test", "url": "http://test.com"},
-        headers={"Authorization": "Bearer wrong-key"},
-    )
-    assert response.status_code in (401, 500)
+    # verify_api_key_or_org checks admin key then DB for org key
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "correct-key"
+        response = client.post(
+            "/agents/",
+            json={"name": "test", "url": "http://test.com"},
+            headers={"Authorization": "Bearer wrong-key"},
+        )
+    assert response.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -1123,3 +1138,255 @@ def test_billing_cli_command_exists():
     from agentgate.cli.main import billing
 
     assert billing is not None
+
+
+# ---------------------------------------------------------------------------
+# Guide / documentation page
+# ---------------------------------------------------------------------------
+
+
+def test_guide_page():
+    response = client.get("/guide")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Documentation" in response.text
+    assert "AgentGate" in response.text
+
+
+def test_guide_page_has_sections():
+    response = client.get("/guide")
+    html = response.text
+    assert "Quickstart" in html
+    assert "API Reference" in html
+    assert "SDK" in html
+    assert "Org-Scoped Auth" in html
+    assert "Rate Limiting" in html
+
+
+# ---------------------------------------------------------------------------
+# Org-scoped auth — resolve_org_or_admin
+# ---------------------------------------------------------------------------
+
+
+def test_org_scoped_get_no_auth():
+    import uuid
+
+    response = client.get(f"/orgs/{uuid.uuid4()}")
+    assert response.status_code in (401, 403)
+
+
+def test_org_scoped_agents_no_auth():
+    import uuid
+
+    response = client.get(f"/orgs/{uuid.uuid4()}/agents")
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# Org update schema
+# ---------------------------------------------------------------------------
+
+
+def test_org_update_schema():
+    from agentgate.server.schemas import OrgUpdate
+
+    update = OrgUpdate(cost_per_invocation=0.005, rate_limit=50.0)
+    dumped = update.model_dump(exclude_none=True)
+    assert dumped["cost_per_invocation"] == 0.005
+    assert dumped["rate_limit"] == 50.0
+    assert "name" not in dumped
+
+
+# ---------------------------------------------------------------------------
+# Org create with billing fields
+# ---------------------------------------------------------------------------
+
+
+def test_org_create_with_billing():
+    from agentgate.server.schemas import OrgCreate
+
+    org = OrgCreate(
+        name="test-org", api_key="mysecretkey",
+        cost_per_invocation=0.002, rate_limit=50.0, rate_burst=100,
+    )
+    assert org.cost_per_invocation == 0.002
+    assert org.rate_limit == 50.0
+    assert org.rate_burst == 100
+    assert "api_key" not in org.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Organization model — new fields
+# ---------------------------------------------------------------------------
+
+
+def test_organization_model_fields():
+    from agentgate.db.models import Organization
+
+    assert hasattr(Organization, "cost_per_invocation")
+    assert hasattr(Organization, "billing_alert_threshold")
+    assert hasattr(Organization, "rate_limit")
+    assert hasattr(Organization, "rate_burst")
+
+
+# ---------------------------------------------------------------------------
+# OrgResponse schema — includes billing/rate fields
+# ---------------------------------------------------------------------------
+
+
+def test_org_response_schema():
+    import uuid
+    from datetime import datetime, timezone
+
+    from agentgate.server.schemas import OrgResponse
+
+    data = {
+        "id": uuid.uuid4(),
+        "name": "test-org",
+        "cost_per_invocation": 0.001,
+        "billing_alert_threshold": None,
+        "rate_limit": 10.0,
+        "rate_burst": 20,
+        "created_at": datetime.now(timezone.utc),
+    }
+    resp = OrgResponse(**data)
+    assert resp.cost_per_invocation == 0.001
+    assert resp.rate_limit == 10.0
+
+
+# ---------------------------------------------------------------------------
+# Org billing endpoints — auth required
+# ---------------------------------------------------------------------------
+
+
+def test_org_billing_no_auth():
+    import uuid
+
+    response = client.get(f"/orgs/{uuid.uuid4()}/billing")
+    assert response.status_code in (401, 403)
+
+
+def test_org_billing_breakdown_no_auth():
+    import uuid
+
+    response = client.get(f"/orgs/{uuid.uuid4()}/billing/breakdown")
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# Org update endpoint — no auth
+# ---------------------------------------------------------------------------
+
+
+def test_org_update_no_auth():
+    import uuid
+
+    response = client.put(
+        f"/orgs/{uuid.uuid4()}", json={"rate_limit": 50.0},
+    )
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# Per-org rate limiter
+# ---------------------------------------------------------------------------
+
+
+def test_per_org_rate_limiter():
+    from agentgate.server.ratelimit import RateLimiter
+
+    limiter = RateLimiter(rate=5.0, burst=2)
+    assert limiter.allow("org:test:ip1")
+    assert limiter.allow("org:test:ip1")
+    assert not limiter.allow("org:test:ip1")
+    # Different org key should be allowed
+    assert limiter.allow("org:other:ip1")
+
+
+# ---------------------------------------------------------------------------
+# SDK org CRUD methods exist
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_sync_org_methods():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000", api_key="test")
+    assert hasattr(c, "create_org")
+    assert hasattr(c, "list_orgs")
+    assert hasattr(c, "get_org")
+    assert hasattr(c, "update_org")
+    assert hasattr(c, "delete_org")
+    assert hasattr(c, "list_org_agents")
+    assert hasattr(c, "get_org_billing")
+    assert hasattr(c, "get_org_billing_breakdown")
+    c.close()
+
+
+def test_sdk_async_org_methods():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000", api_key="test")
+    assert hasattr(c, "create_org")
+    assert hasattr(c, "list_orgs")
+    assert hasattr(c, "get_org")
+    assert hasattr(c, "update_org")
+    assert hasattr(c, "delete_org")
+    assert hasattr(c, "list_org_agents")
+    assert hasattr(c, "get_org_billing")
+    assert hasattr(c, "get_org_billing_breakdown")
+
+
+# ---------------------------------------------------------------------------
+# verify_api_key_or_org exists
+# ---------------------------------------------------------------------------
+
+
+def test_verify_api_key_or_org_exists():
+    from agentgate.server.routes import verify_api_key_or_org
+
+    assert verify_api_key_or_org is not None
+
+
+# ---------------------------------------------------------------------------
+# Org-scoped register — admin key still works
+# ---------------------------------------------------------------------------
+
+
+def test_register_agent_with_admin_key():
+    """POST /agents/ with admin key should still work (backwards compat)."""
+    import uuid
+    from datetime import datetime, timezone
+
+    agent_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    def mock_refresh(a):
+        a.id = agent_id
+        a.created_at = now
+        a.updated_at = now
+        a.org_id = None
+        a.webhook_url = None
+
+    mock_session.refresh = AsyncMock(side_effect=mock_refresh)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "admin-key"
+        response = client.post(
+            "/agents/",
+            json={"name": "test-agent", "url": "http://test.com"},
+            headers={"Authorization": "Bearer admin-key"},
+        )
+    assert response.status_code == 201
