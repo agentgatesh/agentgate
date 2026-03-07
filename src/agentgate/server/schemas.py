@@ -10,6 +10,7 @@ class AgentCreate(BaseModel):
     url: str = Field(..., min_length=1, max_length=2048)
     version: str = "1.0.0"
     skills: list[dict] = []
+    webhook_url: str | None = None
 
 
 class AgentUpdate(BaseModel):
@@ -18,6 +19,7 @@ class AgentUpdate(BaseModel):
     url: str | None = None
     version: str | None = None
     skills: list[dict] | None = None
+    webhook_url: str | None = None
 
 
 class AgentResponse(BaseModel):
@@ -27,6 +29,7 @@ class AgentResponse(BaseModel):
     url: str
     version: str
     skills: list[dict]
+    webhook_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

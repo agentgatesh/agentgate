@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -9,6 +10,7 @@ from agentgate import __version__
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.healthcheck import get_all_health, health_check_loop
 from agentgate.server.metrics import get_metrics
 from agentgate.server.routes import router as agents_router
 
@@ -16,10 +18,21 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import asyncio
+
+    task = asyncio.create_task(health_check_loop())
+    yield
+    task.cancel()
+
+
 app = FastAPI(
     title="AgentGate",
     description="The unified gateway to deploy, connect, and monetize AI agents.",
     version=__version__,
+    lifespan=lifespan,
 )
 
 app.include_router(agents_router)
@@ -38,6 +51,11 @@ async def health():
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
     return (STATIC_DIR / "dashboard.html").read_text()
+
+
+@app.get("/health/agents")
+async def agents_health():
+    return get_all_health()
 
 
 @app.get("/metrics")
