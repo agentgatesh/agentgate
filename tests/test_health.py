@@ -131,6 +131,7 @@ def _make_fake_agent(**kwargs):
         "auth_type": "none",
         "webhook_url": None,
         "api_key_hash": None,
+        "price_per_task": 0.0,
         "org_id": None,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
@@ -2622,3 +2623,271 @@ def test_async_sdk_chain_methods_exist():
     assert hasattr(c, "update_chain")
     assert hasattr(c, "delete_chain")
     assert hasattr(c, "run_chain")
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — Models
+# ---------------------------------------------------------------------------
+
+
+def test_agent_model_has_price_per_task():
+    from agentgate.db.models import Agent
+    agent = Agent(name="test", url="http://test.com", price_per_task=0.01)
+    assert agent.price_per_task == 0.01
+
+
+def test_agent_model_price_field_exists():
+    from agentgate.db.models import Agent
+    assert hasattr(Agent, "price_per_task")
+
+
+def test_org_model_has_balance():
+    from agentgate.db.models import Organization
+    org = Organization(name="test", api_key_hash="abc", balance=100.0)
+    assert org.balance == 100.0
+
+
+def test_org_model_balance_field_exists():
+    from agentgate.db.models import Organization
+    assert hasattr(Organization, "balance")
+
+
+def test_org_model_has_tier():
+    from agentgate.db.models import Organization
+    org = Organization(name="test", api_key_hash="abc", tier="pro")
+    assert org.tier == "pro"
+
+
+def test_org_model_tier_field_exists():
+    from agentgate.db.models import Organization
+    assert hasattr(Organization, "tier")
+
+
+def test_transaction_model():
+    import uuid
+
+    from agentgate.db.models import Transaction
+    tx = Transaction(
+        payer_org_id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        agent_name="test-agent",
+        amount=0.01,
+        fee=0.0003,
+        net=0.0097,
+        tx_type="task",
+    )
+    assert tx.amount == 0.01
+    assert tx.fee == 0.0003
+    assert tx.net == 0.0097
+    assert tx.tx_type == "task"
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — Schemas
+# ---------------------------------------------------------------------------
+
+
+def test_agent_create_schema_has_price():
+    from agentgate.server.schemas import AgentCreate
+    a = AgentCreate(name="test", url="http://test.com", price_per_task=0.05)
+    assert a.price_per_task == 0.05
+
+
+def test_agent_create_schema_default_price():
+    from agentgate.server.schemas import AgentCreate
+    a = AgentCreate(name="test", url="http://test.com")
+    assert a.price_per_task == 0.0
+
+
+def test_agent_response_schema_has_price():
+    import uuid
+    from datetime import datetime, timezone
+
+    from agentgate.server.schemas import AgentResponse
+    r = AgentResponse(
+        id=uuid.uuid4(), name="t", description="", url="http://t.com",
+        version="1.0.0", skills=[], price_per_task=0.05,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    assert r.price_per_task == 0.05
+
+
+def test_org_create_schema_has_tier():
+    from agentgate.server.schemas import OrgCreate
+    o = OrgCreate(name="test", api_key="test-key-123", tier="pro")
+    assert o.tier == "pro"
+
+
+def test_org_create_schema_default_tier():
+    from agentgate.server.schemas import OrgCreate
+    o = OrgCreate(name="test", api_key="test-key-123")
+    assert o.tier == "free"
+
+
+def test_org_create_schema_invalid_tier():
+    from pydantic import ValidationError
+
+    from agentgate.server.schemas import OrgCreate
+    with pytest.raises(ValidationError):
+        OrgCreate(name="test", api_key="test-key-123", tier="invalid")
+
+
+def test_org_response_schema_has_balance_tier():
+    import uuid
+    from datetime import datetime, timezone
+
+    from agentgate.server.schemas import OrgResponse
+    r = OrgResponse(
+        id=uuid.uuid4(), name="t", cost_per_invocation=0.001,
+        rate_limit=10.0, rate_burst=20, balance=50.0, tier="pro",
+        created_at=datetime.now(timezone.utc),
+    )
+    assert r.balance == 50.0
+    assert r.tier == "pro"
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — Migration
+# ---------------------------------------------------------------------------
+
+
+def test_monetization_migration_exists():
+    import os
+    path = os.path.join(
+        os.path.dirname(__file__), "..",
+        "src/agentgate/db/migrations/versions/h8i9j0k1l2m3_monetization.py",
+    )
+    assert os.path.exists(path)
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — Billing engine
+# ---------------------------------------------------------------------------
+
+
+def test_tier_fee_percentages():
+    from agentgate.server.routes import TIER_FEE_PCT
+    assert TIER_FEE_PCT["free"] == 0.03
+    assert TIER_FEE_PCT["pro"] == 0.025
+    assert TIER_FEE_PCT["enterprise"] == 0.02
+
+
+def test_tier_limits_defined():
+    from agentgate.server.org_routes import TIER_LIMITS
+    assert "free" in TIER_LIMITS
+    assert "pro" in TIER_LIMITS
+    assert "enterprise" in TIER_LIMITS
+    assert TIER_LIMITS["free"]["max_agents"] == 5
+    assert TIER_LIMITS["pro"]["max_agents"] == 50
+    assert TIER_LIMITS["enterprise"]["max_agents"] == 500
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — Wallet endpoint (mocked)
+# ---------------------------------------------------------------------------
+
+
+def test_wallet_endpoint_requires_auth():
+    import uuid
+    response = client.get(f"/orgs/{uuid.uuid4()}/wallet")
+    assert response.status_code in (401, 403)
+
+
+def test_topup_endpoint_requires_auth():
+    import uuid
+    response = client.post(f"/orgs/{uuid.uuid4()}/topup", json={"amount": 10.0})
+    assert response.status_code in (401, 403)
+
+
+def test_transactions_endpoint_requires_auth():
+    import uuid
+    response = client.get(f"/orgs/{uuid.uuid4()}/transactions")
+    assert response.status_code in (401, 403)
+
+
+def test_transaction_summary_endpoint_requires_auth():
+    import uuid
+    response = client.get(f"/orgs/{uuid.uuid4()}/transactions/summary")
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — Billing logic unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_billing_free_agent():
+    """Free agent (price=0) should not charge anything."""
+    from agentgate.server.routes import _process_billing
+    agent = MagicMock()
+    agent.price_per_task = 0
+    charged, err = await _process_billing(agent, None, "task-1")
+    assert charged is True
+    assert err is None
+
+
+@pytest.mark.asyncio
+async def test_process_billing_admin_key():
+    """Admin key (no org) should bypass billing."""
+    from agentgate.server.routes import _process_billing
+    agent = MagicMock()
+    agent.price_per_task = 1.0
+    charged, err = await _process_billing(agent, None, "task-1")
+    assert charged is True
+    assert err is None
+
+
+@pytest.mark.asyncio
+async def test_process_billing_insufficient_funds():
+    """Should reject if org has insufficient balance."""
+    from agentgate.server.routes import _process_billing
+    agent = MagicMock()
+    agent.price_per_task = 10.0
+    org = MagicMock()
+    org.balance = 5.0
+    charged, err = await _process_billing(agent, org, "task-1")
+    assert charged is False
+    assert "Insufficient balance" in err
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Monetization — V1 routing
+# ---------------------------------------------------------------------------
+
+
+def test_v1_wallet_endpoint_exists():
+    import uuid
+    response = client.get(f"/v1/orgs/{uuid.uuid4()}/wallet")
+    assert response.status_code in (401, 403)
+
+
+def test_v1_transactions_endpoint_exists():
+    import uuid
+    response = client.get(f"/v1/orgs/{uuid.uuid4()}/transactions")
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: SDK — monetization methods exist
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_wallet_methods_exist():
+    from agentgate.sdk.client import AgentGateClient
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "get_org_wallet")
+    assert hasattr(c, "topup_org")
+    assert hasattr(c, "list_org_transactions")
+    assert hasattr(c, "get_org_transaction_summary")
+    c.close()
+
+
+def test_async_sdk_wallet_methods_exist():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "get_org_wallet")
+    assert hasattr(c, "topup_org")
+    assert hasattr(c, "list_org_transactions")
+    assert hasattr(c, "get_org_transaction_summary")

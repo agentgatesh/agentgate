@@ -13,6 +13,7 @@ class AgentCreate(BaseModel):
     tags: list[str] = []
     webhook_url: str | None = None
     org_id: uuid.UUID | None = None
+    price_per_task: float = 0.0
     agent_api_key: str | None = Field(default=None, exclude=True)
 
 
@@ -24,6 +25,7 @@ class AgentUpdate(BaseModel):
     skills: list[dict] | None = None
     tags: list[str] | None = None
     webhook_url: str | None = None
+    price_per_task: float | None = None
     agent_api_key: str | None = Field(default=None, exclude=True)
 
 
@@ -36,6 +38,7 @@ class AgentResponse(BaseModel):
     skills: list[dict]
     tags: list[str] = []
     webhook_url: str | None = None
+    price_per_task: float = 0.0
     org_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
@@ -50,6 +53,7 @@ class OrgCreate(BaseModel):
     billing_alert_threshold: float | None = None
     rate_limit: float = 10.0
     rate_burst: int = 20
+    tier: str = Field(default="free", pattern="^(free|pro|enterprise)$")
 
 
 class OrgUpdate(BaseModel):
@@ -58,6 +62,7 @@ class OrgUpdate(BaseModel):
     billing_alert_threshold: float | None = None
     rate_limit: float | None = None
     rate_burst: int | None = None
+    tier: str | None = Field(default=None, pattern="^(free|pro|enterprise)$")
 
 
 class OrgResponse(BaseModel):
@@ -67,6 +72,8 @@ class OrgResponse(BaseModel):
     billing_alert_threshold: float | None = None
     rate_limit: float
     rate_burst: int
+    balance: float = 0.0
+    tier: str = "free"
     created_at: datetime
 
     model_config = {"from_attributes": True}
