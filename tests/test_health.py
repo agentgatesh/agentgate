@@ -44,6 +44,19 @@ def test_landing_page_seo_meta():
 
 
 # ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_page():
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Dashboard" in response.text
+    assert "AgentGate" in response.text
+
+
+# ---------------------------------------------------------------------------
 # Auth — POST /agents/ requires API key
 # ---------------------------------------------------------------------------
 
@@ -396,15 +409,38 @@ def test_route_task_records_metrics():
 # ---------------------------------------------------------------------------
 
 
-def test_metrics_endpoint():
+def test_metrics_endpoint_no_auth():
+    """GET /metrics without auth returns 401 when api_key is set."""
+    with patch("agentgate.server.app.settings") as mock_settings:
+        mock_settings.api_key = "test-key"
+        response = client.get("/metrics")
+    assert response.status_code == 401
+
+
+def test_metrics_endpoint_with_auth():
     from agentgate.server import metrics
     metrics.reset()
-    response = client.get("/metrics")
+    with patch("agentgate.server.app.settings") as mock_settings:
+        mock_settings.api_key = "test-key"
+        response = client.get(
+            "/metrics",
+            headers={"Authorization": "Bearer test-key"},
+        )
     assert response.status_code == 200
     data = response.json()
     assert "total_requests" in data
     assert "total_errors" in data
     assert "agents" in data
+
+
+def test_metrics_endpoint_no_key_configured():
+    """GET /metrics without api_key configured is open."""
+    from agentgate.server import metrics
+    metrics.reset()
+    with patch("agentgate.server.app.settings") as mock_settings:
+        mock_settings.api_key = ""
+        response = client.get("/metrics")
+    assert response.status_code == 200
 
 
 # ---------------------------------------------------------------------------

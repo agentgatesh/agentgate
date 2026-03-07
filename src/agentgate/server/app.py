@@ -1,14 +1,18 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 
 from agentgate import __version__
+from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
 from agentgate.server.metrics import get_metrics
 from agentgate.server.routes import router as agents_router
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -31,8 +35,16 @@ async def health():
     return {"status": "ok", "version": __version__}
 
 
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    return (STATIC_DIR / "dashboard.html").read_text()
+
+
 @app.get("/metrics")
-async def metrics():
+async def metrics(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
+    if settings.api_key:
+        if not credentials or credentials.credentials != settings.api_key:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return get_metrics()
 
 
