@@ -1,4 +1,5 @@
 import json
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -3710,3 +3711,297 @@ async def test_ws_billing_called_on_success():
             assert result_resp["type"] == "result"
 
     mock_billing.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# UCP — /.well-known/ucp
+# ---------------------------------------------------------------------------
+
+
+def test_well_known_ucp():
+    response = client.get("/.well-known/ucp")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ucp" in data
+    assert data["ucp"]["version"] == "2026-03-01"
+    assert "dev.ucp.shopping" in data["ucp"]["services"]
+    assert len(data["ucp"]["capabilities"]) >= 1
+    assert data["ucp"]["capabilities"][0]["name"] == "dev.ucp.shopping.checkout"
+    assert data["platform"]["name"] == "AgentGate"
+
+
+# ---------------------------------------------------------------------------
+# UCP — Catalog
+# ---------------------------------------------------------------------------
+
+
+def test_ucp_catalog():
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.ucp_routes.async_session", mock_factory):
+        response = client.get("/ucp/catalog")
+    assert response.status_code == 200
+    data = response.json()
+    assert "products" in data
+    assert "total" in data
+    assert data["ucp"]["capability"] == "dev.ucp.shopping.catalog"
+
+
+# ---------------------------------------------------------------------------
+# UCP — Checkout sessions
+# ---------------------------------------------------------------------------
+
+
+def test_ucp_checkout_no_agent_id():
+    response = client.post("/ucp/checkout", json={"task": {"id": "t1"}})
+    assert response.status_code == 400
+
+
+def test_ucp_checkout_no_task():
+    response = client.post("/ucp/checkout", json={"agent_id": "test"})
+    assert response.status_code == 400
+
+
+def test_ucp_checkout_invalid_agent():
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=None)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.ucp_routes.async_session", mock_factory):
+        response = client.post("/ucp/checkout", json={
+            "agent_id": str(uuid.uuid4()),
+            "task": {"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+        })
+    assert response.status_code == 404
+
+
+def test_ucp_checkout_free_agent():
+    """Creating checkout for a free agent should return 400."""
+    agent_id = str(uuid.uuid4())
+    mock_agent = MagicMock()
+    mock_agent.id = uuid.UUID(agent_id)
+    mock_agent.name = "free-agent"
+    mock_agent.price_per_task = 0.0
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_agent)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.ucp_routes.async_session", mock_factory):
+        response = client.post("/ucp/checkout", json={
+            "agent_id": agent_id,
+            "task": {"id": "t1"},
+        })
+    assert response.status_code == 400
+    assert "free" in response.json()["detail"].lower()
+
+
+def test_ucp_checkout_create_session():
+    """Create a checkout session for a paid agent."""
+    agent_id = str(uuid.uuid4())
+    mock_agent = MagicMock()
+    mock_agent.id = uuid.UUID(agent_id)
+    mock_agent.name = "paid-agent"
+    mock_agent.price_per_task = 1.50
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_agent)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.ucp_routes.async_session", mock_factory):
+        response = client.post("/ucp/checkout", json={
+            "agent_id": agent_id,
+            "task": {"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+        })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "pending"
+    assert data["agent_name"] == "paid-agent"
+    assert data["amount"] == 1.50
+    assert data["ucp"]["version"] == "2026-03-01"
+    assert "session_id" in data
+
+
+def test_ucp_checkout_get_session():
+    """Get a previously created checkout session."""
+    from agentgate.server.ucp_routes import _checkout_sessions
+
+    session_id = "test-session-get"
+    _checkout_sessions[session_id] = {
+        "session_id": session_id,
+        "status": "pending",
+        "agent_id": str(uuid.uuid4()),
+        "agent_name": "test",
+        "amount": 1.0,
+    }
+
+    response = client.get(f"/ucp/checkout/{session_id}")
+    assert response.status_code == 200
+    assert response.json()["session_id"] == session_id
+
+    # Cleanup
+    del _checkout_sessions[session_id]
+
+
+def test_ucp_checkout_get_missing():
+    response = client.get("/ucp/checkout/nonexistent")
+    assert response.status_code == 404
+
+
+def test_ucp_checkout_complete_missing():
+    response = client.post("/ucp/checkout/nonexistent/complete")
+    assert response.status_code == 404
+
+
+def test_ucp_checkout_complete_already_completed():
+    from agentgate.server.ucp_routes import _checkout_sessions
+
+    session_id = "test-session-done"
+    _checkout_sessions[session_id] = {"status": "completed"}
+
+    response = client.post(f"/ucp/checkout/{session_id}/complete")
+    assert response.status_code == 400
+
+    del _checkout_sessions[session_id]
+
+
+# ---------------------------------------------------------------------------
+# UCP — Agent card with UCP capability
+# ---------------------------------------------------------------------------
+
+
+def test_agent_card_ucp_paid():
+    """Paid agent card should include UCP checkout capability."""
+    agent_id = str(uuid.uuid4())
+    mock_agent = MagicMock()
+    mock_agent.id = uuid.UUID(agent_id)
+    mock_agent.name = "paid-agent-card"
+    mock_agent.description = "A paid agent"
+    mock_agent.url = "http://paid.example.com"
+    mock_agent.version = "1.0.0"
+    mock_agent.skills = [{"id": "test", "name": "Test"}]
+    mock_agent.price_per_task = 2.00
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_agent)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get(f"/agents/{agent_id}/card")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ucp" in data
+    assert data["ucp"]["version"] == "2026-03-01"
+    assert "dev.ucp.shopping.checkout" in data["ucp"]["capabilities"]
+    assert data["ucp"]["price_per_task"] == 2.00
+
+
+def test_agent_card_ucp_free():
+    """Free agent card should NOT include UCP data."""
+    agent_id = str(uuid.uuid4())
+    mock_agent = MagicMock()
+    mock_agent.id = uuid.UUID(agent_id)
+    mock_agent.name = "free-agent-card"
+    mock_agent.description = "A free agent"
+    mock_agent.url = "http://free.example.com"
+    mock_agent.version = "1.0.0"
+    mock_agent.skills = []
+    mock_agent.price_per_task = 0.0
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_agent)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get(f"/agents/{agent_id}/card")
+    assert response.status_code == 200
+    data = response.json()
+    assert "ucp" not in data
+
+
+# ---------------------------------------------------------------------------
+# UCP — Task routing with UCP metadata
+# ---------------------------------------------------------------------------
+
+
+def test_task_routing_ucp_metadata():
+    """Task routing to paid agent should include UCP metadata in response."""
+    agent_id = str(uuid.uuid4())
+    mock_agent = MagicMock()
+    mock_agent.id = uuid.UUID(agent_id)
+    mock_agent.name = "paid-echo"
+    mock_agent.url = "http://paid.example.com"
+    mock_agent.version = "1.0.0"
+    mock_agent.skills = []
+    mock_agent.tags = []
+    mock_agent.org_id = None
+    mock_agent.api_key_hash = None
+    mock_agent.webhook_url = None
+    mock_agent.price_per_task = 0.50
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_agent)
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    # Mock A2A response
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "result": {"parts": [{"type": "text", "text": "hello"}]},
+    }
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+        patch("agentgate.server.routes._process_billing",
+              new_callable=AsyncMock,
+              return_value=(True, None)),
+        patch("agentgate.server.routes.httpx.AsyncClient") as mock_httpx,
+    ):
+        mock_settings.api_key = "admin-key"
+        mock_client_inst = AsyncMock()
+        mock_client_inst.post = AsyncMock(return_value=mock_resp)
+        mock_client_inst.__aenter__ = AsyncMock(return_value=mock_client_inst)
+        mock_client_inst.__aexit__ = AsyncMock(return_value=False)
+        mock_httpx.return_value = mock_client_inst
+
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={
+                "id": "ucp-test-1",
+                "message": {"parts": [{"type": "text", "text": "hi"}]},
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "ucp" in data
+    assert data["ucp"]["version"] == "2026-03-01"
+    assert data["ucp"]["price_per_task"] == 0.50
+    assert data["ucp"]["capability"] == "dev.ucp.shopping.checkout"
+    assert "result" in data

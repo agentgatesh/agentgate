@@ -16,6 +16,7 @@ from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
 from agentgate.server.org_routes import router as orgs_router
 from agentgate.server.routes import router as agents_router
+from agentgate.server.ucp_routes import router as ucp_router
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -59,6 +60,8 @@ app.include_router(chains_router)
 app.include_router(agents_router, prefix="/v1")
 app.include_router(orgs_router, prefix="/v1")
 app.include_router(chains_router, prefix="/v1")
+app.include_router(ucp_router)
+app.include_router(ucp_router, prefix="/v1")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -172,6 +175,13 @@ async def plugins_info(credentials: HTTPAuthorizationCredentials | None = Depend
         "plugins": plugin_manager.plugin_info,
         "total": len(plugin_manager.plugin_info),
     }
+
+
+@app.get("/.well-known/ucp")
+async def well_known_ucp():
+    from agentgate.server.ucp_routes import get_ucp_profile
+
+    return get_ucp_profile()
 
 
 @app.get("/.well-known/agent.json")
