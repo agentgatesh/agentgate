@@ -42,6 +42,9 @@ services:
       REDIS_URL: redis://redis:6379/0
     ports:
       - "127.0.0.1:8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - deploy_data:/data/deploys
 
   echo-agent:
     build: examples/echo-agent
@@ -65,3 +68,4 @@ services:
 
 volumes:
   pgdata:
+  deploy_data:
