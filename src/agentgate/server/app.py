@@ -72,6 +72,11 @@ async def guide_page():
     return (STATIC_DIR / "guide.html").read_text()
 
 
+@app.get("/marketplace", response_class=HTMLResponse)
+async def marketplace_page():
+    return (STATIC_DIR / "marketplace.html").read_text()
+
+
 @app.get("/health/agents")
 @app.get("/v1/health/agents")
 async def agents_health():

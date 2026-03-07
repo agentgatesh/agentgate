@@ -10,6 +10,7 @@ class AgentCreate(BaseModel):
     url: str = Field(..., min_length=1, max_length=2048)
     version: str = "1.0.0"
     skills: list[dict] = []
+    tags: list[str] = []
     webhook_url: str | None = None
     org_id: uuid.UUID | None = None
     agent_api_key: str | None = Field(default=None, exclude=True)
@@ -21,6 +22,7 @@ class AgentUpdate(BaseModel):
     url: str | None = None
     version: str | None = None
     skills: list[dict] | None = None
+    tags: list[str] | None = None
     webhook_url: str | None = None
     agent_api_key: str | None = Field(default=None, exclude=True)
 
@@ -32,6 +34,7 @@ class AgentResponse(BaseModel):
     url: str
     version: str
     skills: list[dict]
+    tags: list[str] = []
     webhook_url: str | None = None
     org_id: uuid.UUID | None = None
     created_at: datetime

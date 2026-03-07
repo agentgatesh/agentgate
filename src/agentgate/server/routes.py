@@ -8,12 +8,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import case, cast, desc, func, select
 from sqlalchemy.types import Date
+from sse_starlette.sse import EventSourceResponse
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent, Organization, TaskLog
 from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
+from agentgate.server.plugins import plugin_manager
 from agentgate.server.ratelimit import RateLimiter, task_limiter
 from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse, AgentUpdate
 
@@ -68,6 +70,7 @@ async def register_agent(
             url=data.url,
             version=data.version,
             skills=data.skills,
+            tags=data.tags,
             webhook_url=data.webhook_url,
             org_id=org_id,
             api_key_hash=_hash_api_key(data.agent_api_key) if data.agent_api_key else None,
@@ -79,7 +82,10 @@ async def register_agent(
 
 
 @router.get("/", response_model=list[AgentResponse])
-async def list_agents(skill: str | None = None):
+async def list_agents(
+    skill: str | None = None,
+    tag: str | None = Query(default=None),
+):
     async with async_session() as session:
         query = select(Agent).order_by(Agent.created_at.desc())
         result = await session.execute(query)
@@ -94,7 +100,26 @@ async def list_agents(skill: str | None = None):
                     for s in (a.skills or [])
                 )
             ]
+        if tag:
+            tag_lower = tag.lower()
+            agents = [
+                a for a in agents
+                if any(tag_lower == t.lower() for t in (a.tags or []))
+            ]
         return agents
+
+
+@router.get("/tags")
+async def list_tags():
+    """List all unique tags across all agents."""
+    async with async_session() as session:
+        result = await session.execute(select(Agent).order_by(Agent.created_at.desc()))
+        agents = result.scalars().all()
+    tags: dict[str, int] = {}
+    for agent in agents:
+        for t in agent.tags or []:
+            tags[t] = tags.get(t, 0) + 1
+    return {"tags": [{"name": k, "count": v} for k, v in sorted(tags.items())]}
 
 
 @router.get("/by-name/{name}", response_model=list[AgentResponse])
@@ -436,6 +461,15 @@ async def route_task(
     target_url = f"{agent.url.rstrip('/')}/a2a"
     logger.info("Routing task to %s (%s)", agent_name, target_url)
 
+    # Run pre-task plugins
+    pre_context = await plugin_manager.run_pre_hooks({
+        "agent_id": str(agent_id),
+        "agent_name": agent_name,
+        "task": task,
+        "client_ip": client_ip,
+    })
+    task = pre_context.get("task", task)
+
     with Timer() as t:
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
@@ -499,4 +533,127 @@ async def route_task(
             },
         )
 
+    # Run post-task plugins
+    background_tasks.add_task(
+        plugin_manager.run_post_hooks,
+        {
+            "agent_id": str(agent_id),
+            "agent_name": agent_name,
+            "task": task,
+            "client_ip": client_ip,
+            "status": "success",
+            "latency_ms": round(t.elapsed_ms, 1),
+            "response": resp.json(),
+        },
+    )
+
     return resp.json()
+
+
+@router.post("/{agent_id}/task/stream")
+async def route_task_stream(
+    agent_id: uuid.UUID, task: dict, request: Request,
+    background_tasks: BackgroundTasks,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme_optional),
+):
+    """Route an A2A task and stream the response via Server-Sent Events.
+
+    Returns an SSE stream with events:
+      - status: task routing status updates
+      - chunk: streamed response data from the agent
+      - result: final complete result
+      - error: error details if something fails
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        if agent.org_id:
+            org = await session.get(Organization, agent.org_id)
+            if org:
+                org_limiter = RateLimiter(rate=org.rate_limit, burst=org.rate_burst)
+                org_key = f"org:{org.id}:{client_ip}"
+                if not org_limiter.allow(org_key):
+                    raise HTTPException(status_code=429, detail="Too many requests")
+            else:
+                if not task_limiter.allow(client_ip):
+                    raise HTTPException(status_code=429, detail="Too many requests")
+        else:
+            if not task_limiter.allow(client_ip):
+                raise HTTPException(status_code=429, detail="Too many requests")
+
+    if agent.api_key_hash:
+        if not credentials or _hash_api_key(credentials.credentials) != agent.api_key_hash:
+            raise HTTPException(status_code=401, detail="Invalid or missing agent API key")
+
+    agent_name = agent.name
+    webhook_url = agent.webhook_url
+    task_id_str = task.get("id")
+    target_url = f"{agent.url.rstrip('/')}/a2a"
+
+    async def event_generator():
+        yield {"event": "status", "data": f"Routing task to {agent_name}"}
+
+        with Timer() as t:
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as http_client:
+                    async with http_client.stream(
+                        "POST", target_url, json=task,
+                    ) as resp:
+                        if resp.status_code >= 400:
+                            record_request(
+                                agent_name, t.elapsed_ms,
+                                error_type=f"http_{resp.status_code}",
+                            )
+                            yield {
+                                "event": "error",
+                                "data": f"Agent returned {resp.status_code}",
+                            }
+                            return
+
+                        chunks = []
+                        async for chunk in resp.aiter_text():
+                            chunks.append(chunk)
+                            yield {"event": "chunk", "data": chunk}
+
+            except httpx.ConnectError:
+                record_request(agent_name, t.elapsed_ms, error_type="connect_error")
+                yield {"event": "error", "data": f"Cannot reach agent at {agent.url}"}
+                return
+            except httpx.TimeoutException:
+                record_request(agent_name, t.elapsed_ms, error_type="timeout")
+                yield {"event": "error", "data": f"Agent at {agent.url} timed out"}
+                return
+
+        record_request(agent_name, t.elapsed_ms)
+        logger.info(
+            "Task streamed to %s — %.0fms", agent_name, t.elapsed_ms,
+        )
+
+        yield {
+            "event": "result",
+            "data": "".join(chunks),
+        }
+
+        # Save log (inline since we're in a generator)
+        await _save_task_log(
+            agent_id, agent_name, client_ip,
+            task_id_str, "success", t.elapsed_ms,
+        )
+
+        if webhook_url:
+            await _fire_webhook(
+                webhook_url,
+                {
+                    "event": "task.completed",
+                    "agent_id": str(agent_id),
+                    "agent_name": agent_name,
+                    "task_id": task_id_str,
+                    "latency_ms": round(t.elapsed_ms, 1),
+                },
+            )
+
+    return EventSourceResponse(event_generator())

@@ -19,6 +19,7 @@ class Agent(Base):
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False, default="1.0.0")
     skills: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]", default=list)
     auth_type: Mapped[str] = mapped_column(String(50), nullable=False, default="none")
     webhook_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     api_key_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -39,6 +40,9 @@ class Organization(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     api_key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    secondary_api_key_hash: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, default=None,
+    )
     cost_per_invocation: Mapped[float] = mapped_column(Float, nullable=False, default=0.001)
     billing_alert_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
     rate_limit: Mapped[float] = mapped_column(Float, nullable=False, default=10.0)

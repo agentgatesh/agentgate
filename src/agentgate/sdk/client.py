@@ -36,12 +36,22 @@ class AgentGateClient:
 
     # --- Registry operations ---
 
-    def list_agents(self, skill: str | None = None) -> list[dict]:
-        """List all registered agents. Optionally filter by skill ID or name."""
+    def list_agents(
+        self, skill: str | None = None, tag: str | None = None,
+    ) -> list[dict]:
+        """List all registered agents. Optionally filter by skill or tag."""
         params = {}
         if skill:
             params["skill"] = skill
+        if tag:
+            params["tag"] = tag
         r = self._client.get(f"{self.server_url}/agents/", params=params)
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_tags(self) -> dict:
+        """List all unique agent tags with counts."""
+        r = self._client.get(f"{self.server_url}/agents/tags")
         self._raise_for_status(r)
         return r.json()
 
@@ -278,6 +288,24 @@ class AgentGateClient:
         """Get daily billing breakdown for an organization."""
         r = self._client.get(
             f"{self.server_url}/orgs/{org_id}/billing/breakdown",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def rotate_org_key(self, org_id: str) -> dict:
+        """Start API key rotation. Returns new key (shown once)."""
+        r = self._client.post(
+            f"{self.server_url}/orgs/{org_id}/rotate-key",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def confirm_org_key_rotation(self, org_id: str) -> dict:
+        """Confirm key rotation: promote new key, revoke old."""
+        r = self._client.post(
+            f"{self.server_url}/orgs/{org_id}/confirm-rotation",
             headers=self._headers(auth=True),
         )
         self._raise_for_status(r)

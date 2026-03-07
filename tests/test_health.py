@@ -127,6 +127,7 @@ def _make_fake_agent(**kwargs):
         "url": "http://test.com",
         "version": "1.0.0",
         "skills": [{"id": "echo", "name": "Echo", "description": "Echoes input"}],
+        "tags": [],
         "auth_type": "none",
         "webhook_url": None,
         "api_key_hash": None,
@@ -1566,3 +1567,310 @@ def test_docker_compose_test_exists():
 
     compose_file = Path(__file__).parent.parent / "docker-compose.test.yml"
     assert compose_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# Marketplace page
+# ---------------------------------------------------------------------------
+
+
+def test_marketplace_page():
+    response = client.get("/marketplace")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Marketplace" in response.text
+    assert "AgentGate" in response.text
+
+
+# ---------------------------------------------------------------------------
+# SSE streaming endpoint exists
+# ---------------------------------------------------------------------------
+
+
+def test_sse_stream_endpoint_exists():
+    from agentgate.server.routes import route_task_stream
+
+    assert callable(route_task_stream)
+
+
+def test_sse_stream_agent_not_found():
+    import uuid
+
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.post(
+            f"/agents/{uuid.uuid4()}/task/stream",
+            json={"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+        )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Plugin system
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_pre_hook():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+    calls = []
+
+    @pm.pre_task
+    async def hook(ctx):
+        calls.append(ctx)
+        return ctx
+
+    result = await pm.run_pre_hooks({"agent_name": "test"})
+    assert len(calls) == 1
+    assert result["agent_name"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_post_hook():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+    calls = []
+
+    @pm.post_task
+    async def hook(ctx):
+        calls.append(ctx["status"])
+
+    await pm.run_post_hooks({"status": "success"})
+    assert calls == ["success"]
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_pre_hook_modifies_context():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+
+    @pm.pre_task
+    async def add_field(ctx):
+        ctx["extra"] = "injected"
+        return ctx
+
+    result = await pm.run_pre_hooks({"task": {}})
+    assert result["extra"] == "injected"
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_post_hook_error_doesnt_raise():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+
+    @pm.post_task
+    async def bad_hook(ctx):
+        raise ValueError("boom")
+
+    # Should not raise
+    await pm.run_post_hooks({"status": "ok"})
+
+
+@pytest.mark.asyncio
+async def test_plugin_manager_pre_hook_error_raises():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+
+    @pm.pre_task
+    async def bad_hook(ctx):
+        raise ValueError("rejected")
+
+    with pytest.raises(ValueError, match="rejected"):
+        await pm.run_pre_hooks({"task": {}})
+
+
+def test_plugin_manager_clear():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+
+    async def noop(ctx):
+        pass
+
+    pm.add_pre_hook(noop)
+    pm.add_post_hook(noop)
+    assert len(pm.pre_hooks) == 1
+    assert len(pm.post_hooks) == 1
+
+    pm.clear()
+    assert len(pm.pre_hooks) == 0
+    assert len(pm.post_hooks) == 0
+
+
+def test_plugin_manager_remove_hook():
+    from agentgate.server.plugins import PluginManager
+
+    pm = PluginManager()
+
+    async def hook(ctx):
+        pass
+
+    pm.add_pre_hook(hook)
+    pm.add_post_hook(hook)
+    pm.remove_pre_hook(hook)
+    pm.remove_post_hook(hook)
+    assert len(pm.pre_hooks) == 0
+    assert len(pm.post_hooks) == 0
+
+
+def test_global_plugin_manager_exists():
+    from agentgate.server.plugins import plugin_manager
+
+    assert hasattr(plugin_manager, "run_pre_hooks")
+    assert hasattr(plugin_manager, "run_post_hooks")
+
+
+# ---------------------------------------------------------------------------
+# Agent tags
+# ---------------------------------------------------------------------------
+
+
+def test_list_agents_with_tag_filter():
+    agent1 = _make_fake_agent(name="agent-a", tags=["nlp", "chat"])
+    agent2 = _make_fake_agent(name="agent-b", tags=["vision"])
+    mock_factory = _mock_async_session_with_agents([agent1, agent2])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/?tag=nlp")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "agent-a"
+
+
+def test_list_agents_no_tag_match():
+    agent = _make_fake_agent(name="agent-a", tags=["nlp"])
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/?tag=vision")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_tags_endpoint():
+    agent1 = _make_fake_agent(name="a1", tags=["nlp", "chat"])
+    agent2 = _make_fake_agent(name="a2", tags=["nlp", "vision"])
+    mock_factory = _mock_async_session_with_agents([agent1, agent2])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/tags")
+    assert response.status_code == 200
+    data = response.json()
+    assert "tags" in data
+    names = [t["name"] for t in data["tags"]]
+    assert "nlp" in names
+    assert "chat" in names
+    assert "vision" in names
+    nlp_tag = next(t for t in data["tags"] if t["name"] == "nlp")
+    assert nlp_tag["count"] == 2
+
+
+def test_tags_endpoint_empty():
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/tags")
+    assert response.status_code == 200
+    assert response.json()["tags"] == []
+
+
+def test_agent_response_includes_tags():
+    agent = _make_fake_agent(tags=["ml", "test"])
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/")
+    data = response.json()
+    assert data[0]["tags"] == ["ml", "test"]
+
+
+# ---------------------------------------------------------------------------
+# API key rotation
+# ---------------------------------------------------------------------------
+
+
+def test_key_rotation_endpoint_exists():
+    from agentgate.server.org_routes import confirm_key_rotation, rotate_org_key
+
+    assert callable(rotate_org_key)
+    assert callable(confirm_key_rotation)
+
+
+def test_sdk_sync_has_rotation_methods():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "rotate_org_key")
+    assert hasattr(c, "confirm_org_key_rotation")
+    c.close()
+
+
+def test_sdk_async_has_rotation_methods():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "rotate_org_key")
+    assert hasattr(c, "confirm_org_key_rotation")
+
+
+def test_sdk_sync_has_tag_methods():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "list_tags")
+    c.close()
+
+
+def test_sdk_async_has_tag_methods():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "list_tags")
+
+
+# ---------------------------------------------------------------------------
+# Migration file exists
+# ---------------------------------------------------------------------------
+
+
+def test_migration_tags_key_rotation_exists():
+    from pathlib import Path
+
+    migration = (
+        Path(__file__).parent.parent
+        / "src/agentgate/db/migrations/versions"
+        / "f6g7h8i9j0k1_tags_and_key_rotation.py"
+    )
+    assert migration.exists()
+
+
+# ---------------------------------------------------------------------------
+# Marketplace HTML file exists
+# ---------------------------------------------------------------------------
+
+
+def test_marketplace_html_exists():
+    from pathlib import Path
+
+    html = (
+        Path(__file__).parent.parent
+        / "src/agentgate/server/static/marketplace.html"
+    )
+    assert html.exists()
+
+
+# ---------------------------------------------------------------------------
+# Plugin file exists
+# ---------------------------------------------------------------------------
+
+
+def test_plugins_file_exists():
+    from pathlib import Path
+
+    plugins = (
+        Path(__file__).parent.parent
+        / "src/agentgate/server/plugins.py"
+    )
+    assert plugins.exists()

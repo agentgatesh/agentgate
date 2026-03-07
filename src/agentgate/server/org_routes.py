@@ -22,10 +22,13 @@ def _hash_key(key: str) -> str:
 
 
 async def _get_org_by_key(session, credentials: HTTPAuthorizationCredentials) -> Organization:
-    """Look up an organization by its API key hash."""
+    """Look up an organization by its API key hash (checks both primary and secondary)."""
     key_hash = _hash_key(credentials.credentials)
     result = await session.execute(
-        select(Organization).where(Organization.api_key_hash == key_hash)
+        select(Organization).where(
+            (Organization.api_key_hash == key_hash)
+            | (Organization.secondary_api_key_hash == key_hash)
+        )
     )
     return result.scalar_one_or_none()
 
@@ -154,6 +157,67 @@ async def delete_org(org_id: uuid.UUID):
             raise HTTPException(status_code=404, detail="Organization not found")
         await session.delete(org)
         await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# API key rotation
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{org_id}/rotate-key")
+async def rotate_org_key(
+    org_id: uuid.UUID,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+):
+    """Start key rotation: generate a new secondary key.
+
+    The old key remains valid. Call /confirm-rotation to promote the
+    new key and revoke the old one.
+
+    Returns the new API key (only shown once).
+    """
+    import secrets
+
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    new_key = secrets.token_urlsafe(32)
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+        org.secondary_api_key_hash = _hash_key(new_key)
+        await session.commit()
+
+    return {"new_api_key": new_key, "status": "pending_confirmation"}
+
+
+@router.post("/{org_id}/confirm-rotation")
+async def confirm_key_rotation(
+    org_id: uuid.UUID,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+):
+    """Confirm key rotation: promote secondary key to primary.
+
+    After this call, only the new key (from /rotate-key) will work.
+    """
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+        if not org.secondary_api_key_hash:
+            raise HTTPException(
+                status_code=400,
+                detail="No pending rotation. Call /rotate-key first.",
+            )
+        org.api_key_hash = org.secondary_api_key_hash
+        org.secondary_api_key_hash = None
+        await session.commit()
+
+    return {"status": "rotation_confirmed"}
 
 
 # ---------------------------------------------------------------------------
