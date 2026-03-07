@@ -1,29 +1,24 @@
 """Organization routes with org-scoped auth, billing, and rate limits."""
 
-import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import case, cast, func, select
 from sqlalchemy.types import Date
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent, Organization, TaskLog, Transaction
+from agentgate.server.auth import bearer_scheme, hash_api_key
 from agentgate.server.schemas import AgentResponse, OrgCreate, OrgResponse, OrgUpdate
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
-bearer_scheme = HTTPBearer()
-
-
-def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
 
 
 async def _get_org_by_key(session, credentials: HTTPAuthorizationCredentials) -> Organization:
     """Look up an organization by its API key hash (checks both primary and secondary)."""
-    key_hash = _hash_key(credentials.credentials)
+    key_hash = hash_api_key(credentials.credentials)
     result = await session.execute(
         select(Organization).where(
             (Organization.api_key_hash == key_hash)
@@ -85,7 +80,7 @@ async def create_org(data: OrgCreate):
             raise HTTPException(status_code=409, detail="Organization name already exists")
         org = Organization(
             name=data.name,
-            api_key_hash=_hash_key(data.api_key),
+            api_key_hash=hash_api_key(data.api_key),
             cost_per_invocation=data.cost_per_invocation,
             billing_alert_threshold=data.billing_alert_threshold,
             rate_limit=data.rate_limit,
@@ -187,7 +182,7 @@ async def rotate_org_key(
         org = await session.get(Organization, org_id)
         if not org:
             raise HTTPException(status_code=404, detail="Organization not found")
-        org.secondary_api_key_hash = _hash_key(new_key)
+        org.secondary_api_key_hash = hash_api_key(new_key)
         await session.commit()
 
     return {"new_api_key": new_key, "status": "pending_confirmation"}

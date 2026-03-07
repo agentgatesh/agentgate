@@ -73,6 +73,7 @@ def test_register_agent_wrong_key():
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -104,6 +105,7 @@ def _mock_async_session_with_agents(agents):
     mock_result.scalar_one_or_none.return_value = agents[0] if agents else None
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute.return_value = mock_result
     mock_session.get = AsyncMock(side_effect=lambda model, id: next(
         (a for a in agents if a.id == id), None
@@ -135,6 +137,9 @@ def _make_fake_agent(**kwargs):
         "api_key_hash": None,
         "price_per_task": 0.0,
         "org_id": None,
+        "deployed": False,
+        "container_id": None,
+        "container_port": None,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
@@ -793,6 +798,7 @@ def test_agent_logs_empty():
     mock_result.scalars.return_value.all.return_value = []
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=agent)
     mock_session.execute = AsyncMock(return_value=mock_result)
 
@@ -844,6 +850,7 @@ def test_agent_usage_success():
     mock_result.one.return_value = mock_row
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=agent)
     mock_session.execute = AsyncMock(return_value=mock_result)
 
@@ -886,11 +893,11 @@ def test_agent_create_with_api_key():
 
 
 def test_hash_api_key():
-    from agentgate.server.routes import _hash_api_key
+    from agentgate.server.auth import hash_api_key
 
-    h = _hash_api_key("test-key")
+    h = hash_api_key("test-key")
     assert len(h) == 64  # SHA-256 hex digest
-    assert _hash_api_key("test-key") == h  # Deterministic
+    assert hash_api_key("test-key") == h  # Deterministic
 
 
 def test_route_task_per_agent_auth_required():
@@ -1009,6 +1016,7 @@ async def test_cleanup_old_logs_runs():
     mock_result.all.return_value = []
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_session.commit = AsyncMock()
 
@@ -1367,6 +1375,7 @@ def test_register_agent_with_admin_key():
     now = datetime.now(timezone.utc)
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
 
@@ -2071,6 +2080,7 @@ def test_ratelimits_data_with_auth():
     mock_result.scalars.return_value.all.return_value = []
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute = AsyncMock(return_value=mock_result)
 
     mock_ctx = AsyncMock()
@@ -2967,6 +2977,7 @@ async def test_process_billing_success_charges_payer():
     mock_payer.balance = 10.0
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_payer)
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
@@ -3025,6 +3036,7 @@ async def test_process_billing_with_receiver():
         return None
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(side_effect=mock_get)
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
@@ -3068,6 +3080,7 @@ async def test_process_billing_enterprise_fee():
     mock_payer.balance = 100.0
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_payer)
     mock_session.add = MagicMock()
     mock_session.commit = AsyncMock()
@@ -3110,6 +3123,7 @@ def test_route_task_402_insufficient_balance():
 
     # Build a session that returns the agent for .get() and the org for org lookup
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3184,6 +3198,7 @@ async def test_process_billing_called_after_success():
     mock_org.tier = "free"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3241,6 +3256,7 @@ async def test_process_billing_called_on_success():
     mock_org.tier = "free"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3410,6 +3426,7 @@ async def test_stream_billing_not_called_on_error():
     mock_org.tier = "free"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3466,6 +3483,7 @@ async def test_stream_billing_called_on_success():
     mock_org.tier = "free"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3542,6 +3560,7 @@ async def test_stream_billing_402_insufficient_balance():
     mock_org.tier = "free"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3595,6 +3614,7 @@ async def test_ws_billing_402_insufficient_balance():
     mock_org.name = "test-org"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3655,6 +3675,7 @@ async def test_ws_billing_called_on_success():
     mock_org.name = "test-org"
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def mock_get(model, obj_id):
         if obj_id == agent_id:
@@ -3740,6 +3761,7 @@ def test_ucp_catalog():
     mock_result = MagicMock()
     mock_result.scalars.return_value.all.return_value = []
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.execute = AsyncMock(return_value=mock_result)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -3772,6 +3794,7 @@ def test_ucp_checkout_no_task():
 
 def test_ucp_checkout_invalid_agent():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=None)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -3795,6 +3818,7 @@ def test_ucp_checkout_free_agent():
     mock_agent.price_per_task = 0.0
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_agent)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -3819,6 +3843,7 @@ def test_ucp_checkout_create_session():
     mock_agent.price_per_task = 1.50
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_agent)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -3900,6 +3925,7 @@ def test_agent_card_ucp_paid():
     mock_agent.price_per_task = 2.00
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_agent)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -3929,6 +3955,7 @@ def test_agent_card_ucp_free():
     mock_agent.price_per_task = 0.0
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_agent)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -3963,6 +3990,7 @@ def test_task_routing_ucp_metadata():
     mock_agent.price_per_task = 0.50
 
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
     mock_session.get = AsyncMock(return_value=mock_agent)
     mock_ctx = AsyncMock()
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
@@ -4036,6 +4064,7 @@ def test_sdk_ucp_catalog():
 
     with patch("agentgate.server.ucp_routes.async_session") as mock_factory:
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute = AsyncMock(return_value=mock_result)

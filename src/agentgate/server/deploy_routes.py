@@ -4,12 +4,12 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 
-from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.auth import verify_api_key
 from agentgate.server.deploy_engine import (
     allocate_port,
     build_image,
@@ -26,14 +26,6 @@ from agentgate.server.deploy_engine import (
 logger = logging.getLogger("agentgate.deploy_routes")
 
 router = APIRouter(prefix="/deploy", tags=["deploy"])
-bearer_scheme = HTTPBearer()
-
-
-def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    if not settings.api_key:
-        raise HTTPException(status_code=500, detail="API key not configured on server")
-    if credentials.credentials != settings.api_key:
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
 @router.post("/", status_code=201)

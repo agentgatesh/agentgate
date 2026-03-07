@@ -1,5 +1,6 @@
 """Agent chaining: define and execute multi-step agent pipelines."""
 
+import json
 import logging
 import uuid
 
@@ -295,5 +296,4 @@ def _extract_text(response: dict) -> str:
         return response["text"]
 
     # Fallback: stringify
-    import json
     return json.dumps(response)
