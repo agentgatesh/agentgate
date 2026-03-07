@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -3381,3 +3382,331 @@ def test_billing_page():
 def test_landing_page_has_pricing_link():
     response = client.get("/")
     assert "/pricing" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Sessione #20: Streaming & WebSocket billing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_stream_billing_not_called_on_error():
+    """SSE streaming: billing should NOT be called when agent fails."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="stream-paid", price_per_task=1.0,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 10.0
+    mock_org.tier = "free"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        if obj_id == org_id:
+            return mock_org
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+        patch("agentgate.server.routes._process_billing") as mock_billing,
+    ):
+        mock_settings.api_key = "admin-key"
+        response = client.post(
+            f"/agents/{agent_id}/task/stream",
+            json={"id": "s1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+            headers={"Authorization": "Bearer org-key-123"},
+        )
+
+    # Agent unreachable => error event, billing NOT called
+    assert response.status_code == 200  # SSE always returns 200
+    assert "error" in response.text
+    mock_billing.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stream_billing_called_on_success():
+    """SSE streaming: billing IS called after successful stream."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="stream-ok", price_per_task=0.5,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 10.0
+    mock_org.tier = "free"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        if obj_id == org_id:
+            return mock_org
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    # Build a mock streaming response
+    mock_stream_resp = AsyncMock()
+    mock_stream_resp.status_code = 200
+
+    async def mock_aiter_text():
+        yield '{"status": "completed"}'
+
+    mock_stream_resp.aiter_text = mock_aiter_text
+    mock_stream_resp.__aenter__ = AsyncMock(return_value=mock_stream_resp)
+    mock_stream_resp.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client_inst = AsyncMock()
+    mock_client_inst.stream = MagicMock(return_value=mock_stream_resp)
+    mock_client_inst.__aenter__ = AsyncMock(return_value=mock_client_inst)
+    mock_client_inst.__aexit__ = AsyncMock(return_value=False)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+        patch("agentgate.server.routes._process_billing",
+              new_callable=AsyncMock,
+              return_value=(True, None)) as mock_billing,
+        patch("agentgate.server.routes.httpx.AsyncClient") as mock_httpx,
+    ):
+        mock_settings.api_key = "admin-key"
+        mock_httpx.return_value = mock_client_inst
+
+        response = client.post(
+            f"/agents/{agent_id}/task/stream",
+            json={"id": "s2", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+            headers={"Authorization": "Bearer org-key-123"},
+        )
+
+    assert response.status_code == 200
+    assert "result" in response.text
+    mock_billing.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_stream_billing_402_insufficient_balance():
+    """SSE streaming: returns 402 when balance is insufficient."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="stream-expensive", price_per_task=100.0,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 1.0
+    mock_org.tier = "free"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "admin-key"
+        response = client.post(
+            f"/agents/{agent_id}/task/stream",
+            json={"id": "s3", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+            headers={"Authorization": "Bearer org-key-123"},
+        )
+
+    # Pre-check fails with 402
+    assert response.status_code == 402
+    assert "Insufficient balance" in response.text
+
+
+@pytest.mark.asyncio
+async def test_ws_billing_402_insufficient_balance():
+    """WebSocket: returns error when balance is insufficient."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="ws-expensive", price_per_task=100.0,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 1.0
+    mock_org.tier = "free"
+    mock_org.name = "test-org"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        if obj_id == org_id:
+            return mock_org
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "admin-key"
+        with client.websocket_connect(f"/agents/{agent_id}/task/ws") as ws:
+            # Auth first
+            ws.send_text(json.dumps({"type": "auth", "token": "org-key-123"}))
+            auth_resp = ws.receive_json()
+            assert auth_resp["type"] == "status"
+
+            # Send task — should fail with insufficient balance
+            ws.send_text(json.dumps({
+                "id": "w1",
+                "message": {"parts": [{"type": "text", "text": "hi"}]},
+            }))
+            resp = ws.receive_json()
+            assert resp["type"] == "error"
+            assert "Insufficient balance" in resp["data"]
+
+
+@pytest.mark.asyncio
+async def test_ws_billing_called_on_success():
+    """WebSocket: billing IS called after successful task."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="ws-paid-ok", price_per_task=0.5,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 10.0
+    mock_org.tier = "free"
+    mock_org.name = "test-org"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        if obj_id == org_id:
+            return mock_org
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"status": {"state": "completed"}}
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+        patch("agentgate.server.routes._process_billing",
+              new_callable=AsyncMock,
+              return_value=(True, None)) as mock_billing,
+        patch("agentgate.server.routes.httpx.AsyncClient") as mock_httpx,
+    ):
+        mock_settings.api_key = "admin-key"
+        mock_client_inst = AsyncMock()
+        mock_client_inst.post = AsyncMock(return_value=mock_resp)
+        mock_client_inst.__aenter__ = AsyncMock(return_value=mock_client_inst)
+        mock_client_inst.__aexit__ = AsyncMock(return_value=False)
+        mock_httpx.return_value = mock_client_inst
+
+        with client.websocket_connect(f"/agents/{agent_id}/task/ws") as ws:
+            # Auth first
+            ws.send_text(json.dumps({"type": "auth", "token": "org-key-123"}))
+            auth_resp = ws.receive_json()
+            assert auth_resp["type"] == "status"
+
+            # Send task
+            ws.send_text(json.dumps({
+                "id": "w2",
+                "message": {"parts": [{"type": "text", "text": "hi"}]},
+            }))
+            # status message
+            status_resp = ws.receive_json()
+            assert status_resp["type"] == "status"
+            # result
+            result_resp = ws.receive_json()
+            assert result_resp["type"] == "result"
+
+    mock_billing.assert_called_once()
