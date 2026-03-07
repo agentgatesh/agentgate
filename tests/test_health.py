@@ -3158,6 +3158,188 @@ def test_async_sdk_tier_change_method():
 
 
 # ---------------------------------------------------------------------------
+# Sessione #19: Billing post-task (charge after success, not before)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_billing_called_after_success():
+    """Billing should only charge after successful A2A response."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="paid-agent", price_per_task=1.0,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 10.0
+    mock_org.tier = "free"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        if obj_id == org_id:
+            return mock_org
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    # Mock httpx to simulate agent FAILURE (ConnectError)
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+        patch("agentgate.server.routes._process_billing") as mock_billing,
+    ):
+        mock_settings.api_key = "admin-key"
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+            headers={"Authorization": "Bearer org-key-123"},
+        )
+
+    # Agent unreachable => 502, billing should NOT have been called
+    assert response.status_code == 502
+    mock_billing.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_billing_called_on_success():
+    """Billing IS called after successful A2A response."""
+    import uuid
+
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="paid-ok", price_per_task=0.5,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 10.0
+    mock_org.tier = "free"
+
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        if obj_id == org_id:
+            return mock_org
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+    mock_session.execute = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    # Mock httpx to simulate SUCCESS
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"status": {"state": "completed"}}
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+        patch("agentgate.server.routes._process_billing",
+              new_callable=AsyncMock,
+              return_value=(True, None)) as mock_billing,
+        patch("agentgate.server.routes.httpx.AsyncClient") as mock_httpx,
+    ):
+        mock_settings.api_key = "admin-key"
+        mock_client_inst = AsyncMock()
+        mock_client_inst.post = AsyncMock(return_value=mock_resp)
+        mock_client_inst.__aenter__ = AsyncMock(return_value=mock_client_inst)
+        mock_client_inst.__aexit__ = AsyncMock(return_value=False)
+        mock_httpx.return_value = mock_client_inst
+
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "t2", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+            headers={"Authorization": "Bearer org-key-123"},
+        )
+
+    assert response.status_code == 200
+    mock_billing.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Sessione #19: Marketplace shows pricing
+# ---------------------------------------------------------------------------
+
+
+def test_marketplace_page_has_pricing():
+    response = client.get("/marketplace")
+    assert response.status_code == 200
+    html = response.text
+    assert "price_per_task" in html or "card-price" in html
+
+
+def test_marketplace_page_has_sort_by_price():
+    response = client.get("/marketplace")
+    html = response.text
+    assert "price-low" in html or "Price" in html
+
+
+def test_marketplace_has_pricing_link():
+    response = client.get("/marketplace")
+    assert "/pricing" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Sessione #19: Guide page has monetization section
+# ---------------------------------------------------------------------------
+
+
+def test_guide_page_has_monetization():
+    response = client.get("/guide")
+    assert response.status_code == 200
+    html = response.text
+    assert "Pricing" in html or "pricing-tiers" in html
+    assert "Wallet" in html or "wallet-topup" in html
+    assert "Transaction" in html or "transactions" in html
+
+
+def test_guide_page_has_billing_flow():
+    response = client.get("/guide")
+    html = response.text
+    assert "billing-flow" in html or "Billing Flow" in html
+
+
+def test_guide_page_has_sdk_wallet_example():
+    response = client.get("/guide")
+    html = response.text
+    assert "get_org_wallet" in html or "topup_org" in html
+
+
+# ---------------------------------------------------------------------------
 # FASE 3: Pricing page
 # ---------------------------------------------------------------------------
 

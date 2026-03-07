@@ -737,11 +737,18 @@ async def route_task(
             )
             caller_org_for_billing = result.scalar_one_or_none()
 
-    # Process billing for paid agents
-    if agent.price_per_task > 0:
-        charged, err = await _process_billing(agent, caller_org_for_billing, task.get("id"))
-        if not charged:
-            raise HTTPException(status_code=402, detail=err)
+    # Pre-check balance (fail fast with 402 before calling the agent)
+    if agent.price_per_task > 0 and caller_org_for_billing:
+        if caller_org_for_billing.balance < agent.price_per_task:
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    f"Insufficient balance: "
+                    f"{caller_org_for_billing.balance:.4f} < "
+                    f"{agent.price_per_task:.4f} "
+                    f"(agent: {agent.name})"
+                ),
+            )
 
     agent_name = agent.name
     webhook_url = agent.webhook_url
@@ -801,6 +808,14 @@ async def route_task(
 
     record_request(agent_name, t.elapsed_ms)
     logger.info("Task routed to %s — %d in %.0fms", agent_name, resp.status_code, t.elapsed_ms)
+
+    # Charge billing AFTER successful A2A response (no charge on failure)
+    if agent.price_per_task > 0:
+        charged, err = await _process_billing(
+            agent, caller_org_for_billing, task_id_str,
+        )
+        if not charged:
+            raise HTTPException(status_code=402, detail=err)
 
     # Save log in background
     background_tasks.add_task(
