@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import json
 import logging
 import uuid
@@ -15,7 +14,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import case, cast, desc, func, select
 from sqlalchemy.types import Date
 from sse_starlette.sse import EventSourceResponse
@@ -23,6 +22,7 @@ from sse_starlette.sse import EventSourceResponse
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent, Organization, Review, TaskLog, Transaction
+from agentgate.server.auth import bearer_scheme, bearer_scheme_optional, hash_api_key
 from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
 from agentgate.server.plugins import plugin_manager
@@ -39,15 +39,6 @@ from agentgate.server.schemas import (
 logger = logging.getLogger("agentgate.routing")
 
 router = APIRouter(prefix="/agents", tags=["agents"])
-bearer_scheme = HTTPBearer()
-bearer_scheme_optional = HTTPBearer(auto_error=False)
-
-
-def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    if not settings.api_key:
-        raise HTTPException(status_code=500, detail="API key not configured on server")
-    if credentials.credentials != settings.api_key:
-        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
 async def verify_api_key_or_org(
@@ -57,7 +48,7 @@ async def verify_api_key_or_org(
     if settings.api_key and credentials.credentials == settings.api_key:
         return None  # Admin
     # Try org key
-    key_hash = _hash_api_key(credentials.credentials)
+    key_hash = hash_api_key(credentials.credentials)
     async with async_session() as session:
         result = await session.execute(
             select(Organization).where(Organization.api_key_hash == key_hash)
@@ -66,11 +57,6 @@ async def verify_api_key_or_org(
         if org:
             return org
     raise HTTPException(status_code=401, detail="Invalid API key")
-
-
-def _hash_api_key(key: str) -> str:
-    """Hash an API key with SHA-256."""
-    return hashlib.sha256(key.encode()).hexdigest()
 
 
 @router.post("/", response_model=AgentResponse, status_code=201)
@@ -91,7 +77,7 @@ async def register_agent(
             webhook_url=data.webhook_url,
             price_per_task=data.price_per_task,
             org_id=org_id,
-            api_key_hash=_hash_api_key(data.agent_api_key) if data.agent_api_key else None,
+            api_key_hash=hash_api_key(data.agent_api_key) if data.agent_api_key else None,
         )
         session.add(agent)
         await session.commit()
@@ -312,7 +298,7 @@ async def update_agent(
         if "agent_api_key" in update_data:
             key = update_data.pop("agent_api_key")
             if key:
-                agent.api_key_hash = _hash_api_key(key)
+                agent.api_key_hash = hash_api_key(key)
             else:
                 agent.api_key_hash = None
         for field, value in update_data.items():
@@ -738,13 +724,13 @@ async def route_task(
 
     # Per-agent auth check
     if agent.api_key_hash:
-        if not credentials or _hash_api_key(credentials.credentials) != agent.api_key_hash:
+        if not credentials or hash_api_key(credentials.credentials) != agent.api_key_hash:
             raise HTTPException(status_code=401, detail="Invalid or missing agent API key")
 
     # Resolve calling org for billing (if credentials provided and match an org)
     caller_org_for_billing = None
     if credentials:
-        key_hash = _hash_api_key(credentials.credentials)
+        key_hash = hash_api_key(credentials.credentials)
         async with async_session() as session:
             result = await session.execute(
                 select(Organization).where(Organization.api_key_hash == key_hash)
@@ -920,13 +906,13 @@ async def route_task_stream(
                 raise HTTPException(status_code=429, detail="Too many requests")
 
     if agent.api_key_hash:
-        if not credentials or _hash_api_key(credentials.credentials) != agent.api_key_hash:
+        if not credentials or hash_api_key(credentials.credentials) != agent.api_key_hash:
             raise HTTPException(status_code=401, detail="Invalid or missing agent API key")
 
     # Resolve calling org for billing
     caller_org_for_billing = None
     if credentials:
-        key_hash = _hash_api_key(credentials.credentials)
+        key_hash = hash_api_key(credentials.credentials)
         async with async_session() as session:
             result = await session.execute(
                 select(Organization).where(Organization.api_key_hash == key_hash)
@@ -1071,7 +1057,7 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
                 auth_token = msg.get("token")
                 # Resolve calling org for billing
                 if auth_token:
-                    key_hash = _hash_api_key(auth_token)
+                    key_hash = hash_api_key(auth_token)
                     async with async_session() as session:
                         result = await session.execute(
                             select(Organization).where(Organization.api_key_hash == key_hash)
@@ -1082,7 +1068,7 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
 
             # For task messages, validate auth if required
             if agent.api_key_hash:
-                if not auth_token or _hash_api_key(auth_token) != agent.api_key_hash:
+                if not auth_token or hash_api_key(auth_token) != agent.api_key_hash:
                     await websocket.send_json({
                         "type": "error", "data": "Invalid or missing agent API key",
                     })
@@ -1094,7 +1080,7 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
                 continue
 
             # Extract task payload
-            task = msg.get("task", msg) if msg_type == "task" else msg.get("task", msg)
+            task = msg.get("task", msg)
             task_id_str = task.get("id")
 
             # Pre-check balance (fail fast with 402)

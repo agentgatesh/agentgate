@@ -3,13 +3,14 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 
 from agentgate import __version__
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.auth import bearer_scheme_optional as bearer_scheme
 from agentgate.server.chain_routes import router as chains_router
 from agentgate.server.deploy_routes import router as deploy_router
 from agentgate.server.healthcheck import get_all_health, health_check_loop
@@ -18,8 +19,6 @@ from agentgate.server.metrics import get_metrics
 from agentgate.server.org_routes import router as orgs_router
 from agentgate.server.routes import router as agents_router
 from agentgate.server.ucp_routes import router as ucp_router
-
-bearer_scheme = HTTPBearer(auto_error=False)
 
 STATIC_DIR = Path(__file__).parent / "static"
 

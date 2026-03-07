@@ -9,15 +9,15 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 
 from agentgate import __version__
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent, Organization, Transaction
+from agentgate.server.auth import bearer_scheme_optional as bearer_scheme
 
 router = APIRouter(prefix="/ucp", tags=["ucp"])
-bearer_scheme = HTTPBearer(auto_error=False)
 
 # UCP spec version we implement
 UCP_VERSION = "2026-03-01"
@@ -171,7 +171,10 @@ async def create_checkout_session(
             f"Balance {caller_org.balance:.4f} < {agent.price_per_task:.4f}"
         )
         _checkout_sessions[session_id] = checkout
-        raise HTTPException(status_code=402, detail=checkout)
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient balance: {caller_org.balance:.4f} < {agent.price_per_task:.4f}",
+        )
 
     _checkout_sessions[session_id] = checkout
     return checkout
