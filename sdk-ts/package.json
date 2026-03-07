@@ -1,0 +1,40 @@
+{
+  "name": "agentgatesh",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for AgentGate — deploy, connect and monetize AI agents via A2A + MCP + UCP",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "agentgate",
+    "ai",
+    "agents",
+    "a2a",
+    "mcp",
+    "ucp",
+    "sdk"
+  ],
+  "author": "AgentGate <info@agentgate.sh>",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentgatesh/agentgate",
+    "directory": "sdk-ts"
+  },
+  "homepage": "https://agentgate.sh",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}
