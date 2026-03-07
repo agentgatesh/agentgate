@@ -262,16 +262,20 @@ async def run_chain(
 
 def _extract_text(response: dict) -> str:
     """Extract text from an A2A response payload."""
-    # Try standard A2A response format
+    # Try top-level artifacts[].parts[].text (standard A2A task response)
+    for artifact in response.get("artifacts", []):
+        for part in artifact.get("parts", []):
+            if part.get("type") == "text":
+                return part["text"]
+
+    # Try result.artifacts or result.message (wrapped format)
     if "result" in response:
         result = response["result"]
         if isinstance(result, dict):
-            # result.artifacts[].parts[].text
             for artifact in result.get("artifacts", []):
                 for part in artifact.get("parts", []):
                     if part.get("type") == "text":
                         return part["text"]
-            # result.message.parts[].text
             msg = result.get("message", {})
             for part in msg.get("parts", []):
                 if part.get("type") == "text":
@@ -279,7 +283,7 @@ def _extract_text(response: dict) -> str:
         if isinstance(result, str):
             return result
 
-    # Try message.parts[].text (common echo-agent format)
+    # Try message.parts[].text
     msg = response.get("message", {})
     if isinstance(msg, dict):
         for part in msg.get("parts", []):

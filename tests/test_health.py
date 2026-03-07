@@ -2479,6 +2479,19 @@ def test_get_chain_not_found(mock_chain_session, mock_routes_session):
 # ---------------------------------------------------------------------------
 
 
+def test_extract_text_top_level_artifacts():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {
+        "id": "task-1",
+        "status": {"state": "completed"},
+        "artifacts": [
+            {"parts": [{"type": "text", "text": "8"}]}
+        ],
+    }
+    assert _extract_text(resp) == "8"
+
+
 def test_extract_text_a2a_result_artifacts():
     from agentgate.server.chain_routes import _extract_text
 
