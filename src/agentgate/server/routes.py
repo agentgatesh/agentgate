@@ -5,7 +5,8 @@ import uuid
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, cast, desc, func, select
+from sqlalchemy.types import Date
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
@@ -47,6 +48,7 @@ async def register_agent(data: AgentCreate):
             version=data.version,
             skills=data.skills,
             webhook_url=data.webhook_url,
+            org_id=data.org_id,
             api_key_hash=_hash_api_key(data.agent_api_key) if data.agent_api_key else None,
         )
         session.add(agent)
@@ -203,6 +205,63 @@ async def get_agent_usage(agent_id: uuid.UUID):
         "total_errors": row.total_errors,
         "avg_latency_ms": round(row.avg_latency_ms, 1) if row.avg_latency_ms else 0,
         "last_invocation": row.last_invocation.isoformat() if row.last_invocation else None,
+    }
+
+
+@router.get("/{agent_id}/usage/breakdown", dependencies=[Depends(verify_api_key)])
+async def get_agent_usage_breakdown(
+    agent_id: uuid.UUID,
+    period: str = Query(default="day", pattern="^(day|month)$"),
+    days: int = Query(default=30, ge=1, le=365),
+):
+    """Get usage breakdown by day or month. Requires API key."""
+    from datetime import datetime, timedelta, timezone
+
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+
+        if period == "day":
+            date_col = cast(TaskLog.created_at, Date).label("period")
+        else:
+            date_col = func.date_trunc("month", TaskLog.created_at).label("period")
+
+        query = (
+            select(
+                date_col,
+                func.count(TaskLog.id).label("invocations"),
+                func.count(
+                    case((TaskLog.status == "error", TaskLog.id))
+                ).label("errors"),
+                func.avg(TaskLog.latency_ms).label("avg_latency_ms"),
+            )
+            .where(TaskLog.agent_id == agent_id, TaskLog.created_at >= since)
+            .group_by("period")
+            .order_by("period")
+        )
+        result = await session.execute(query)
+        rows = result.all()
+
+    return {
+        "agent_id": str(agent_id),
+        "agent_name": agent.name,
+        "period": period,
+        "days": days,
+        "breakdown": [
+            {
+                "period": (
+                    row.period.isoformat()
+                    if hasattr(row.period, "isoformat") else str(row.period)
+                ),
+                "invocations": row.invocations,
+                "errors": row.errors,
+                "avg_latency_ms": round(row.avg_latency_ms, 1) if row.avg_latency_ms else 0,
+            }
+            for row in rows
+        ],
     }
 
 

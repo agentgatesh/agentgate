@@ -114,6 +114,7 @@ def _make_fake_agent(**kwargs):
         "auth_type": "none",
         "webhook_url": None,
         "api_key_hash": None,
+        "org_id": None,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
     }
@@ -963,3 +964,162 @@ def test_rate_limiter_memory_fallback():
     assert limiter.allow("test-ip")
     assert limiter.allow("test-ip")
     assert not limiter.allow("test-ip")  # Burst exhausted
+
+
+# ---------------------------------------------------------------------------
+# Log retention
+# ---------------------------------------------------------------------------
+
+
+def test_log_retention_config():
+    from agentgate.core.config import Settings
+
+    s = Settings(database_url="sqlite://", log_retention_days=7, log_max_per_agent=5000)
+    assert s.log_retention_days == 7
+    assert s.log_max_per_agent == 5000
+
+
+@pytest.mark.asyncio
+async def test_cleanup_old_logs_runs():
+    """cleanup_old_logs should run without error even with mocked session."""
+    from agentgate.server.log_retention import cleanup_old_logs
+
+    mock_result = MagicMock()
+    mock_result.rowcount = 0
+    mock_result.all.return_value = []
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.commit = AsyncMock()
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.log_retention.async_session", mock_factory):
+        await cleanup_old_logs()
+
+    mock_session.commit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Billing breakdown endpoint — GET /agents/{id}/usage/breakdown
+# ---------------------------------------------------------------------------
+
+
+def test_billing_breakdown_no_auth():
+    import uuid
+
+    response = client.get(f"/agents/{uuid.uuid4()}/usage/breakdown")
+    assert response.status_code == 401
+
+
+def test_billing_breakdown_not_found():
+    import uuid
+
+    mock_factory = _mock_async_session_with_agents([])
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "test-key"
+        response = client.get(
+            f"/agents/{uuid.uuid4()}/usage/breakdown",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard page
+# ---------------------------------------------------------------------------
+
+
+def test_admin_page():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Admin" in response.text
+    assert "AgentGate" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Multi-tenancy — Organizations
+# ---------------------------------------------------------------------------
+
+
+def test_org_create_no_auth():
+    response = client.post("/orgs/", json={"name": "test-org", "api_key": "secret-key-123"})
+    assert response.status_code == 401
+
+
+def test_org_list_no_auth():
+    response = client.get("/orgs/")
+    assert response.status_code == 401
+
+
+def test_organization_model():
+    from agentgate.db.models import Organization
+
+    assert Organization.__tablename__ == "organizations"
+
+
+def test_org_schema():
+    from agentgate.server.schemas import OrgCreate
+
+    org = OrgCreate(name="test-org", api_key="mysecretkey")
+    assert org.name == "test-org"
+    # api_key should be excluded from model_dump
+    assert "api_key" not in org.model_dump()
+
+
+def test_agent_create_with_org_id():
+    import uuid
+
+    from agentgate.server.schemas import AgentCreate
+
+    org_id = uuid.uuid4()
+    agent = AgentCreate(name="test", url="http://test.com", org_id=org_id)
+    assert agent.org_id == org_id
+
+
+def test_agent_response_has_org_id():
+    import uuid
+
+    agent = _make_fake_agent(org_id=uuid.uuid4())
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get(f"/agents/{agent.id}")
+    assert response.status_code == 200
+    assert "org_id" in response.json()
+
+
+# ---------------------------------------------------------------------------
+# Async SDK client
+# ---------------------------------------------------------------------------
+
+
+def test_async_client_import():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000", api_key="test")
+    assert c.server_url == "http://localhost:8000"
+    assert c.api_key == "test"
+
+
+def test_async_client_exported():
+    from agentgate.sdk import AsyncAgentGateClient
+
+    assert AsyncAgentGateClient is not None
+
+
+# ---------------------------------------------------------------------------
+# CLI billing command
+# ---------------------------------------------------------------------------
+
+
+def test_billing_cli_command_exists():
+    from agentgate.cli.main import billing
+
+    assert billing is not None

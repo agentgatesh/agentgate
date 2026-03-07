@@ -11,6 +11,7 @@ class AgentCreate(BaseModel):
     version: str = "1.0.0"
     skills: list[dict] = []
     webhook_url: str | None = None
+    org_id: uuid.UUID | None = None
     agent_api_key: str | None = Field(default=None, exclude=True)
 
 
@@ -32,8 +33,22 @@ class AgentResponse(BaseModel):
     version: str
     skills: list[dict]
     webhook_url: str | None = None
+    org_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class OrgCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    api_key: str = Field(..., min_length=8, exclude=True)
+
+
+class OrgResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
