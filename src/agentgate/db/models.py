@@ -23,6 +23,9 @@ class Agent(Base):
     auth_type: Mapped[str] = mapped_column(String(50), nullable=False, default="none")
     webhook_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     api_key_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    price_per_task: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0",
+    )
     org_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -47,6 +50,10 @@ class Organization(Base):
     billing_alert_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
     rate_limit: Mapped[float] = mapped_column(Float, nullable=False, default=10.0)
     rate_burst: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    balance: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    tier: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="free", server_default="free",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -109,4 +116,34 @@ class TaskLog(Base):
     __table_args__ = (
         Index("ix_task_logs_agent_id", "agent_id"),
         Index("ix_task_logs_created_at", "created_at"),
+    )
+
+
+class Transaction(Base):
+    """Ledger entry for a paid agent interaction."""
+
+    __tablename__ = "transactions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    payer_org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    receiver_org_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    agent_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    fee: Mapped[float] = mapped_column(Float, nullable=False)
+    net: Mapped[float] = mapped_column(Float, nullable=False)
+    tx_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="task",
+    )
+    task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_transactions_payer_org_id", "payer_org_id"),
+        Index("ix_transactions_receiver_org_id", "receiver_org_id"),
+        Index("ix_transactions_created_at", "created_at"),
     )

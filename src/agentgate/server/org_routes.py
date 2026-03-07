@@ -3,14 +3,14 @@
 import hashlib
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import case, cast, func, select
 from sqlalchemy.types import Date
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import Agent, Organization, TaskLog
+from agentgate.db.models import Agent, Organization, TaskLog, Transaction
 from agentgate.server.schemas import AgentResponse, OrgCreate, OrgResponse, OrgUpdate
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
@@ -90,6 +90,7 @@ async def create_org(data: OrgCreate):
             billing_alert_threshold=data.billing_alert_threshold,
             rate_limit=data.rate_limit,
             rate_burst=data.rate_burst,
+            tier=data.tier,
         )
         session.add(org)
         await session.commit()
@@ -370,4 +371,180 @@ async def get_org_billing_breakdown(
             }
             for row in rows
         ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Wallet / Balance
+# ---------------------------------------------------------------------------
+
+TIER_LIMITS = {
+    "free": {"max_agents": 5, "rate_limit": 10.0, "rate_burst": 20, "fee_pct": 0.03},
+    "pro": {"max_agents": 50, "rate_limit": 100.0, "rate_burst": 200, "fee_pct": 0.025},
+    "enterprise": {"max_agents": 500, "rate_limit": 1000.0, "rate_burst": 2000, "fee_pct": 0.02},
+}
+
+
+@router.get("/{org_id}/wallet")
+async def get_org_wallet(
+    org_id: uuid.UUID,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+):
+    """Get wallet balance and tier info for an organization."""
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        # Count agents owned
+        agent_count_result = await session.execute(
+            select(func.count(Agent.id)).where(Agent.org_id == org_id)
+        )
+        agent_count = agent_count_result.scalar() or 0
+
+    tier_info = TIER_LIMITS.get(org.tier, TIER_LIMITS["free"])
+
+    return {
+        "org_id": str(org_id),
+        "org_name": org.name,
+        "balance": round(org.balance, 4),
+        "tier": org.tier,
+        "tier_limits": tier_info,
+        "agent_count": agent_count,
+        "max_agents": tier_info["max_agents"],
+    }
+
+
+@router.post("/{org_id}/topup")
+async def topup_org_wallet(
+    org_id: uuid.UUID,
+    body: dict,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+):
+    """Add funds to an organization's wallet. Admin or org owner.
+
+    Body: {"amount": 10.0}
+    """
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    amount = body.get("amount", 0)
+    if not isinstance(amount, (int, float)) or amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be a positive number")
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+        org.balance = round(org.balance + amount, 4)
+        await session.commit()
+        await session.refresh(org)
+
+    return {
+        "org_id": str(org_id),
+        "org_name": org.name,
+        "amount_added": amount,
+        "new_balance": round(org.balance, 4),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Transactions
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{org_id}/transactions")
+async def list_org_transactions(
+    org_id: uuid.UUID,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    role: str = Query(default="all", pattern="^(all|payer|receiver)$"),
+):
+    """List transactions for an organization. Filter by role (payer/receiver/all)."""
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        if role == "payer":
+            query = select(Transaction).where(Transaction.payer_org_id == org_id)
+        elif role == "receiver":
+            query = select(Transaction).where(Transaction.receiver_org_id == org_id)
+        else:
+            query = select(Transaction).where(
+                (Transaction.payer_org_id == org_id)
+                | (Transaction.receiver_org_id == org_id)
+            )
+
+        query = query.order_by(Transaction.created_at.desc()).offset(offset).limit(limit)
+        result = await session.execute(query)
+        txns = result.scalars().all()
+
+    return [
+        {
+            "id": str(tx.id),
+            "payer_org_id": str(tx.payer_org_id),
+            "receiver_org_id": str(tx.receiver_org_id) if tx.receiver_org_id else None,
+            "agent_id": str(tx.agent_id),
+            "agent_name": tx.agent_name,
+            "amount": tx.amount,
+            "fee": tx.fee,
+            "net": tx.net,
+            "tx_type": tx.tx_type,
+            "task_id": tx.task_id,
+            "created_at": tx.created_at.isoformat(),
+        }
+        for tx in txns
+    ]
+
+
+@router.get("/{org_id}/transactions/summary")
+async def get_org_transaction_summary(
+    org_id: uuid.UUID,
+    caller_org: Organization | None = Depends(resolve_org_or_admin),
+):
+    """Get transaction summary: total spent, total earned, total fees."""
+    if caller_org and caller_org.id != org_id:
+        raise HTTPException(status_code=403, detail="Access denied to this organization")
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        # Total spent (as payer)
+        spent_result = await session.execute(
+            select(
+                func.coalesce(func.sum(Transaction.amount), 0).label("total_spent"),
+                func.count(Transaction.id).label("tx_count"),
+            ).where(Transaction.payer_org_id == org_id)
+        )
+        spent_row = spent_result.one()
+
+        # Total earned (as receiver)
+        earned_result = await session.execute(
+            select(
+                func.coalesce(func.sum(Transaction.net), 0).label("total_earned"),
+                func.coalesce(func.sum(Transaction.fee), 0).label("total_fees"),
+                func.count(Transaction.id).label("tx_count"),
+            ).where(Transaction.receiver_org_id == org_id)
+        )
+        earned_row = earned_result.one()
+
+    return {
+        "org_id": str(org_id),
+        "org_name": org.name,
+        "balance": round(org.balance, 4),
+        "total_spent": round(float(spent_row.total_spent), 4),
+        "total_earned": round(float(earned_row.total_earned), 4),
+        "total_fees_paid": round(float(earned_row.total_fees), 4),
+        "transactions_as_payer": spent_row.tx_count,
+        "transactions_as_receiver": earned_row.tx_count,
     }

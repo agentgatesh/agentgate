@@ -411,6 +411,46 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    def get_org_wallet(self, org_id: str) -> dict:
+        """Get wallet balance and tier info for an organization."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}/wallet",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def topup_org(self, org_id: str, amount: float) -> dict:
+        """Add funds to an organization's wallet."""
+        r = self._client.post(
+            f"{self.server_url}/orgs/{org_id}/topup",
+            json={"amount": amount},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_org_transactions(
+        self, org_id: str, limit: int = 50, offset: int = 0, role: str = "all",
+    ) -> list[dict]:
+        """List transactions for an organization."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}/transactions",
+            params={"limit": limit, "offset": offset, "role": role},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_org_transaction_summary(self, org_id: str) -> dict:
+        """Get transaction summary for an organization."""
+        r = self._client.get(
+            f"{self.server_url}/orgs/{org_id}/transactions/summary",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     def rotate_org_key(self, org_id: str) -> dict:
         """Start API key rotation. Returns new key (shown once)."""
         r = self._client.post(

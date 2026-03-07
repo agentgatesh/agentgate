@@ -22,7 +22,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import Agent, Organization, Review, TaskLog
+from agentgate.db.models import Agent, Organization, Review, TaskLog, Transaction
 from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
 from agentgate.server.plugins import plugin_manager
@@ -89,6 +89,7 @@ async def register_agent(
             skills=data.skills,
             tags=data.tags,
             webhook_url=data.webhook_url,
+            price_per_task=data.price_per_task,
             org_id=org_id,
             api_key_hash=_hash_api_key(data.agent_api_key) if data.agent_api_key else None,
         )
@@ -567,6 +568,72 @@ async def review_stats(agent_id: uuid.UUID):
     }
 
 
+TIER_FEE_PCT = {"free": 0.03, "pro": 0.025, "enterprise": 0.02}
+
+
+async def _process_billing(
+    agent: Agent,
+    payer_org: Organization | None,
+    task_id_str: str | None,
+):
+    """Process billing for a paid agent task.
+
+    - Deducts agent.price_per_task from payer org balance
+    - Credits agent owner org (minus fee)
+    - Records a Transaction in the ledger
+    - Returns (charged, error_msg) — error_msg is set if insufficient funds
+    """
+    if agent.price_per_task <= 0:
+        return True, None  # Free agent, nothing to charge
+
+    if not payer_org:
+        return True, None  # Admin key, no billing
+
+    if payer_org.balance < agent.price_per_task:
+        return False, (
+            f"Insufficient balance: {payer_org.balance:.4f} < "
+            f"{agent.price_per_task:.4f} (agent: {agent.name})"
+        )
+
+    fee_pct = TIER_FEE_PCT.get(payer_org.tier, 0.03)
+    fee = round(agent.price_per_task * fee_pct, 6)
+    net = round(agent.price_per_task - fee, 6)
+
+    async with async_session() as session:
+        # Deduct from payer
+        payer = await session.get(Organization, payer_org.id)
+        payer.balance = round(payer.balance - agent.price_per_task, 4)
+
+        # Credit agent owner (if different from payer)
+        receiver_org_id = None
+        if agent.org_id and agent.org_id != payer_org.id:
+            receiver = await session.get(Organization, agent.org_id)
+            if receiver:
+                receiver.balance = round(receiver.balance + net, 4)
+                receiver_org_id = receiver.id
+
+        # Record transaction
+        tx = Transaction(
+            payer_org_id=payer_org.id,
+            receiver_org_id=receiver_org_id,
+            agent_id=agent.id,
+            agent_name=agent.name,
+            amount=agent.price_per_task,
+            fee=fee,
+            net=net,
+            tx_type="task",
+            task_id=task_id_str,
+        )
+        session.add(tx)
+        await session.commit()
+
+    logger.info(
+        "Billing: org %s charged %.4f for %s (fee: %.4f, net: %.4f)",
+        payer_org.name, agent.price_per_task, agent.name, fee, net,
+    )
+    return True, None
+
+
 async def _fire_webhook(
     webhook_url: str, payload: dict, max_retries: int = 3,
 ):
@@ -659,6 +726,22 @@ async def route_task(
     if agent.api_key_hash:
         if not credentials or _hash_api_key(credentials.credentials) != agent.api_key_hash:
             raise HTTPException(status_code=401, detail="Invalid or missing agent API key")
+
+    # Resolve calling org for billing (if credentials provided and match an org)
+    caller_org_for_billing = None
+    if credentials:
+        key_hash = _hash_api_key(credentials.credentials)
+        async with async_session() as session:
+            result = await session.execute(
+                select(Organization).where(Organization.api_key_hash == key_hash)
+            )
+            caller_org_for_billing = result.scalar_one_or_none()
+
+    # Process billing for paid agents
+    if agent.price_per_task > 0:
+        charged, err = await _process_billing(agent, caller_org_for_billing, task.get("id"))
+        if not charged:
+            raise HTTPException(status_code=402, detail=err)
 
     agent_name = agent.name
     webhook_url = agent.webhook_url
