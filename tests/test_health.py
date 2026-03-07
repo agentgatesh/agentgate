@@ -1376,6 +1376,7 @@ def test_register_agent_with_admin_key():
         a.updated_at = now
         a.org_id = None
         a.webhook_url = None
+        a.deployed = False
 
     mock_session.refresh = AsyncMock(side_effect=mock_refresh)
 

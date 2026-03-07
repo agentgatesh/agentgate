@@ -40,6 +40,7 @@ class AgentResponse(BaseModel):
     webhook_url: str | None = None
     price_per_task: float = 0.0
     org_id: uuid.UUID | None = None
+    deployed: bool = False
     created_at: datetime
     updated_at: datetime
 

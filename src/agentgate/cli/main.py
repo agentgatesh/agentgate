@@ -156,55 +156,150 @@ def update(agent_id: str, name: str | None, description: str | None, url: str | 
     "--api-key", envvar="AGENTGATE_API_KEY", required=True,
     help="API key (or set AGENTGATE_API_KEY).",
 )
-def deploy(path: str, server: str, api_key: str):
+@click.option("--name", default=None, help="Agent name (overrides agentgate.yaml).")
+@click.option("--register-only", is_flag=True, help="Only register (don't upload & build).")
+def deploy(path: str, server: str, api_key: str, name: str | None, register_only: bool):
     """Deploy an agent from a local directory.
 
-    PATH is the directory containing your agent and an agentgate.yaml config file.
+    PATH is the directory containing your agent code (agent.py) and optionally
+    an agentgate.yaml config file.
+
+    By default, the agent code is packaged, uploaded, and built on the AgentGate
+    server. Use --register-only to just register an externally-hosted agent.
     """
     agent_dir = Path(path)
     config_file = agent_dir / "agentgate.yaml"
 
-    if not config_file.exists():
-        click.echo("Error: agentgate.yaml not found in the agent directory.", err=True)
-        click.echo("Create one with at least 'name' and 'url' fields.", err=True)
+    config = {}
+    if config_file.exists():
+        with open(config_file) as f:
+            config = yaml.safe_load(f) or {}
+
+    agent_name = name or config.get("name")
+    if not agent_name:
+        click.echo(
+            "Error: agent name required. Set 'name' in agentgate.yaml or use --name.",
+            err=True,
+        )
         raise SystemExit(1)
 
-    with open(config_file) as f:
-        config = yaml.safe_load(f)
-
-    required = ["name", "url"]
-    for field in required:
-        if field not in config:
-            click.echo(f"Error: '{field}' is required in agentgate.yaml.", err=True)
+    # Register-only mode: old behavior (requires URL)
+    if register_only:
+        if "url" not in config:
+            click.echo("Error: 'url' is required in agentgate.yaml for --register-only.", err=True)
             raise SystemExit(1)
 
-    payload = {
-        "name": config["name"],
-        "url": config["url"],
-        "description": config.get("description", ""),
-        "version": config.get("version", "1.0.0"),
-        "skills": config.get("skills", []),
-    }
+        payload = {
+            "name": agent_name,
+            "url": config["url"],
+            "description": config.get("description", ""),
+            "version": config.get("version", "1.0.0"),
+            "skills": config.get("skills", []),
+        }
 
-    click.echo(f"Deploying agent '{payload['name']}' to {server}...")
+        click.echo(f"Registering agent '{agent_name}' on {server}...")
 
+        try:
+            r = httpx.post(
+                f"{server}/agents/",
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=10,
+            )
+        except httpx.ConnectError:
+            click.echo(f"Error: cannot reach server at {server}", err=True)
+            raise SystemExit(1)
+
+        if r.status_code == 201:
+            agent = r.json()
+            click.echo("Agent registered successfully!")
+            click.echo(f"  ID:   {agent['id']}")
+            click.echo(f"  Name: {agent['name']}")
+            click.echo(f"  Card: {server}/agents/{agent['id']}/card")
+        else:
+            click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+            raise SystemExit(1)
+        return
+
+    # Full deploy mode: package, upload, build, run
+    if not (agent_dir / "agent.py").exists():
+        click.echo("Error: agent.py not found in the agent directory.", err=True)
+        click.echo("Your agent must have an agent.py with a FastAPI app.", err=True)
+        raise SystemExit(1)
+
+    description = config.get("description", "")
+    version = config.get("version", "1.0.0")
+
+    click.echo(f"Packaging agent '{agent_name}'...")
+    tar_path = _create_tarball(agent_dir)
+
+    click.echo(f"Uploading to {server}...")
     try:
-        r = httpx.post(
-            f"{server}/agents/",
-            json=payload,
+        with open(tar_path, "rb") as f:
+            r = httpx.post(
+                f"{server}/deploy/",
+                files={"file": ("agent.tar.gz", f, "application/gzip")},
+                data={"name": agent_name, "description": description, "version": version},
+                headers={"Authorization": f"Bearer {api_key}"},
+                timeout=120,
+            )
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+    finally:
+        tar_path.unlink(missing_ok=True)
+
+    if r.status_code == 201:
+        data = r.json()
+        click.echo("Agent deployed successfully!")
+        click.echo(f"  ID:   {data['id']}")
+        click.echo(f"  Name: {data['name']}")
+        click.echo(f"  Task: {data['task_url']}")
+        click.echo(f"  Card: {data['card_url']}")
+    else:
+        click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+        raise SystemExit(1)
+
+
+def _create_tarball(agent_dir: Path) -> Path:
+    """Create a tar.gz archive of the agent directory."""
+    import tarfile
+    import tempfile
+
+    tar_path = Path(tempfile.mktemp(suffix=".tar.gz"))
+    with tarfile.open(tar_path, "w:gz") as tf:
+        for item in agent_dir.iterdir():
+            if item.name.startswith(".") or item.name == "__pycache__":
+                continue
+            tf.add(item, arcname=item.name)
+    return tar_path
+
+
+@cli.command()
+@click.argument("agent_id")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
+def undeploy(agent_id: str, server: str, api_key: str):
+    """Stop and remove a deployed agent."""
+    click.echo(f"Undeploying agent {agent_id}...")
+    try:
+        r = httpx.delete(
+            f"{server}/deploy/{agent_id}",
             headers={"Authorization": f"Bearer {api_key}"},
-            timeout=10,
+            timeout=30,
         )
     except httpx.ConnectError:
         click.echo(f"Error: cannot reach server at {server}", err=True)
         raise SystemExit(1)
 
-    if r.status_code == 201:
-        agent = r.json()
-        click.echo("Agent deployed successfully!")
-        click.echo(f"  ID:   {agent['id']}")
-        click.echo(f"  Name: {agent['name']}")
-        click.echo(f"  Card: {server}/agents/{agent['id']}/card")
+    if r.status_code == 200:
+        click.echo("Agent undeployed successfully!")
+    elif r.status_code == 404:
+        click.echo(f"Error: agent {agent_id} not found.", err=True)
+        raise SystemExit(1)
     else:
         click.echo(f"Error ({r.status_code}): {r.text}", err=True)
         raise SystemExit(1)

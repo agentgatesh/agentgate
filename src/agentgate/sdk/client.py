@@ -519,6 +519,55 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    # --- Deploy ---
+
+    def deploy_agent(
+        self,
+        tar_path: str,
+        name: str,
+        description: str = "",
+        version: str = "1.0.0",
+    ) -> dict:
+        """Deploy an agent from a tar.gz archive. Requires API key."""
+        with open(tar_path, "rb") as f:
+            r = self._client.post(
+                f"{self.server_url}/deploy/",
+                files={"file": ("agent.tar.gz", f, "application/gzip")},
+                data={"name": name, "description": description, "version": version},
+                headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {},
+                timeout=120,
+            )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_deploy_status(self, agent_id: str) -> dict:
+        """Get the status of a deployed agent container."""
+        r = self._client.get(
+            f"{self.server_url}/deploy/{agent_id}/status",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_deploy_logs(self, agent_id: str, tail: int = 100) -> dict:
+        """Get recent container logs for a deployed agent."""
+        r = self._client.get(
+            f"{self.server_url}/deploy/{agent_id}/logs",
+            params={"tail": tail},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def undeploy_agent(self, agent_id: str) -> dict:
+        """Stop and remove a deployed agent."""
+        r = self._client.delete(
+            f"{self.server_url}/deploy/{agent_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     # --- Discovery & Health ---
 
     def discover(self) -> dict:

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     log_retention_days: int = 30
     log_max_per_agent: int = 10000
     plugin_config: str = ""
+    deploy_dir: str = "/data/deploys"
+    docker_network: str = "agentgate_default"
+    deploy_port_start: int = 9100
 
 
 settings = Settings()

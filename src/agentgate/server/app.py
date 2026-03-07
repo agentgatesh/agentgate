@@ -11,6 +11,7 @@ from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
 from agentgate.server.chain_routes import router as chains_router
+from agentgate.server.deploy_routes import router as deploy_router
 from agentgate.server.healthcheck import get_all_health, health_check_loop
 from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
@@ -62,6 +63,8 @@ app.include_router(orgs_router, prefix="/v1")
 app.include_router(chains_router, prefix="/v1")
 app.include_router(ucp_router)
 app.include_router(ucp_router, prefix="/v1")
+app.include_router(deploy_router)
+app.include_router(deploy_router, prefix="/v1")
 
 
 @app.get("/", response_class=HTMLResponse)
