@@ -1,3 +1,5 @@
+import re
+import subprocess
 from pathlib import Path
 
 import click
@@ -33,24 +35,31 @@ def status(server: str):
 
 @cli.command(name="list")
 @click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
-def list_agents(server: str):
+@click.option("--skill", default=None, help="Filter agents by skill ID or name.")
+def list_agents(server: str, skill: str | None):
     """List all deployed agents."""
     try:
-        r = httpx.get(f"{server}/agents/", timeout=5)
+        params = {}
+        if skill:
+            params["skill"] = skill
+        r = httpx.get(f"{server}/agents/", params=params, timeout=5)
     except httpx.ConnectError:
         click.echo(f"Error: cannot reach server at {server}", err=True)
         raise SystemExit(1)
 
     agents = r.json()
     if not agents:
-        click.echo("No agents deployed yet.")
+        if skill:
+            click.echo(f"No agents found with skill '{skill}'.")
+        else:
+            click.echo("No agents deployed yet.")
         return
 
     click.echo(f"{'NAME':<25} {'VERSION':<10} {'ID'}")
     click.echo("-" * 70)
     for a in agents:
         click.echo(f"{a['name']:<25} {a['version']:<10} {a['id']}")
-    click.echo(f"\n{len(agents)} agent(s) total.")
+    click.echo(f"\n{len(agents)} agent(s) found.")
 
 
 @cli.command()
@@ -199,3 +208,52 @@ def deploy(path: str, server: str, api_key: str):
     else:
         click.echo(f"Error ({r.status_code}): {r.text}", err=True)
         raise SystemExit(1)
+
+
+def _bump_version(current: str, part: str) -> str:
+    """Bump a semver version string."""
+    major, minor, patch = [int(x) for x in current.split(".")]
+    if part == "major":
+        return f"{major + 1}.0.0"
+    elif part == "minor":
+        return f"{major}.{minor + 1}.0"
+    else:
+        return f"{major}.{minor}.{patch + 1}"
+
+
+@cli.command()
+@click.argument("part", type=click.Choice(["major", "minor", "patch"]))
+@click.option("--tag/--no-tag", default=True, help="Create a git tag (default: yes).")
+def bump(part: str, tag: bool):
+    """Bump the project version (major, minor, or patch).
+
+    Updates pyproject.toml and __init__.py, then creates a git tag.
+    Push the tag to trigger PyPI publish.
+    """
+    root = Path(__file__).resolve().parents[3]
+    pyproject = root / "pyproject.toml"
+    init_file = root / "src" / "agentgate" / "__init__.py"
+
+    new_version = _bump_version(__version__, part)
+
+    # Update pyproject.toml
+    text = pyproject.read_text()
+    text = re.sub(r'version = "[^"]+"', f'version = "{new_version}"', text, count=1)
+    pyproject.write_text(text)
+
+    # Update __init__.py
+    text = init_file.read_text()
+    text = re.sub(r'__version__ = "[^"]+"', f'__version__ = "{new_version}"', text, count=1)
+    init_file.write_text(text)
+
+    click.echo(f"Version bumped: {__version__} -> {new_version}")
+
+    if tag:
+        subprocess.run(["git", "add", str(pyproject), str(init_file)], cwd=root, check=True)
+        subprocess.run(
+            ["git", "commit", "-m", f"chore: bump version to {new_version}"],
+            cwd=root, check=True,
+        )
+        subprocess.run(["git", "tag", f"v{new_version}"], cwd=root, check=True)
+        click.echo(f"Git tag v{new_version} created.")
+        click.echo("Run 'git push && git push --tags' to publish to PyPI.")

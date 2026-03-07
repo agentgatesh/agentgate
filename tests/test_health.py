@@ -112,6 +112,7 @@ def _make_fake_agent(**kwargs):
         "version": "1.0.0",
         "skills": [{"id": "echo", "name": "Echo", "description": "Echoes input"}],
         "auth_type": "none",
+        "webhook_url": None,
         "api_key_hash": None,
         "created_at": datetime.now(timezone.utc),
         "updated_at": datetime.now(timezone.utc),
@@ -566,3 +567,184 @@ def test_agent_create_valid():
     assert agent.name == "test"
     assert agent.version == "1.0.0"
     assert agent.skills == []
+    assert agent.webhook_url is None
+
+
+def test_agent_create_with_webhook():
+    from agentgate.server.schemas import AgentCreate
+
+    agent = AgentCreate(name="test", url="http://test.com", webhook_url="http://hook.com/notify")
+    assert agent.webhook_url == "http://hook.com/notify"
+
+
+# ---------------------------------------------------------------------------
+# GET /agents/?skill= — filter by skill
+# ---------------------------------------------------------------------------
+
+
+def test_list_agents_filter_by_skill():
+    agent1 = _make_fake_agent(
+        name="calc-agent",
+        skills=[{"id": "calculate", "name": "Calculate", "description": "Math"}],
+    )
+    agent2 = _make_fake_agent(
+        name="echo-agent",
+        skills=[{"id": "echo", "name": "Echo", "description": "Echoes input"}],
+    )
+    mock_factory = _mock_async_session_with_agents([agent1, agent2])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/?skill=calculate")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "calc-agent"
+
+
+def test_list_agents_filter_by_skill_no_match():
+    agent1 = _make_fake_agent(
+        name="echo-agent",
+        skills=[{"id": "echo", "name": "Echo", "description": "Echoes input"}],
+    )
+    mock_factory = _mock_async_session_with_agents([agent1])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/?skill=nonexistent")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_agents_filter_by_skill_name():
+    agent1 = _make_fake_agent(
+        name="calc-agent",
+        skills=[{"id": "calc", "name": "Calculate", "description": "Math"}],
+    )
+    mock_factory = _mock_async_session_with_agents([agent1])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get("/agents/?skill=Calculate")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+
+
+# ---------------------------------------------------------------------------
+# GET /agents/{id}/health — agent health status
+# ---------------------------------------------------------------------------
+
+
+def test_agent_health_unknown():
+    import uuid
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, name="health-agent")
+    mock_factory = _mock_async_session_with_agents([agent])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get(f"/agents/{agent_id}/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "unknown"
+    assert data["agent"] == "health-agent"
+
+
+def test_agent_health_with_data():
+    import uuid
+
+    from agentgate.server import healthcheck
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, name="health-agent-2")
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    healthcheck._health_status[str(agent_id)] = {
+        "status": "healthy",
+        "last_check": "2026-03-07T12:00:00+00:00",
+        "latency_ms": 42.0,
+        "error": None,
+    }
+
+    try:
+        with patch("agentgate.server.routes.async_session", mock_factory):
+            response = client.get(f"/agents/{agent_id}/health")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["latency_ms"] == 42.0
+    finally:
+        healthcheck._health_status.pop(str(agent_id), None)
+
+
+def test_agent_health_not_found():
+    import uuid
+
+    mock_factory = _mock_async_session_with_agents([])
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        response = client.get(f"/agents/{uuid.uuid4()}/health")
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /health/agents — all agents health
+# ---------------------------------------------------------------------------
+
+
+def test_all_agents_health():
+    response = client.get("/health/agents")
+    assert response.status_code == 200
+    assert isinstance(response.json(), dict)
+
+
+# ---------------------------------------------------------------------------
+# Health check unit tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_check_agent_healthy():
+    from agentgate.server import healthcheck
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+
+    with patch("agentgate.server.healthcheck.httpx.AsyncClient") as mock_cls:
+        mock_inst = AsyncMock()
+        mock_inst.get.return_value = mock_response
+        mock_inst.__aenter__ = AsyncMock(return_value=mock_inst)
+        mock_inst.__aexit__ = AsyncMock(return_value=False)
+        mock_cls.return_value = mock_inst
+
+        await healthcheck.check_agent("test-id", "test-agent", "http://test:9000")
+
+    assert healthcheck._health_status["test-id"]["status"] == "healthy"
+    healthcheck._health_status.pop("test-id", None)
+
+
+@pytest.mark.asyncio
+async def test_check_agent_unhealthy():
+    import httpx as real_httpx
+
+    from agentgate.server import healthcheck
+
+    with patch("agentgate.server.healthcheck.httpx.AsyncClient") as mock_cls:
+        mock_inst = AsyncMock()
+        mock_inst.get.side_effect = real_httpx.ConnectError("Connection refused")
+        mock_inst.__aenter__ = AsyncMock(return_value=mock_inst)
+        mock_inst.__aexit__ = AsyncMock(return_value=False)
+        mock_cls.return_value = mock_inst
+
+        await healthcheck.check_agent("bad-id", "bad-agent", "http://bad:9000")
+
+    assert healthcheck._health_status["bad-id"]["status"] == "unhealthy"
+    assert healthcheck._health_status["bad-id"]["error"] == "connect_error"
+    healthcheck._health_status.pop("bad-id", None)
+
+
+# ---------------------------------------------------------------------------
+# Version bump helper
+# ---------------------------------------------------------------------------
+
+
+def test_bump_version():
+    from agentgate.cli.main import _bump_version
+
+    assert _bump_version("0.1.0", "patch") == "0.1.1"
+    assert _bump_version("0.1.0", "minor") == "0.2.0"
+    assert _bump_version("0.1.0", "major") == "1.0.0"
+    assert _bump_version("1.2.3", "patch") == "1.2.4"

@@ -2,13 +2,14 @@ import logging
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
 from agentgate.server.ratelimit import task_limiter
 from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse, AgentUpdate
@@ -38,6 +39,7 @@ async def register_agent(data: AgentCreate):
             url=data.url,
             version=data.version,
             skills=data.skills,
+            webhook_url=data.webhook_url,
         )
         session.add(agent)
         await session.commit()
@@ -46,10 +48,22 @@ async def register_agent(data: AgentCreate):
 
 
 @router.get("/", response_model=list[AgentResponse])
-async def list_agents():
+async def list_agents(skill: str | None = None):
     async with async_session() as session:
-        result = await session.execute(select(Agent).order_by(Agent.created_at.desc()))
-        return result.scalars().all()
+        query = select(Agent).order_by(Agent.created_at.desc())
+        result = await session.execute(query)
+        agents = result.scalars().all()
+        if skill:
+            skill_lower = skill.lower()
+            agents = [
+                a for a in agents
+                if any(
+                    skill_lower in s.get("id", "").lower()
+                    or skill_lower in s.get("name", "").lower()
+                    for s in (a.skills or [])
+                )
+            ]
+        return agents
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
@@ -87,6 +101,18 @@ async def delete_agent(agent_id: uuid.UUID):
         await session.commit()
 
 
+@router.get("/{agent_id}/health")
+async def agent_health(agent_id: uuid.UUID):
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+    health = get_agent_health(str(agent_id))
+    if not health:
+        return {"agent": agent.name, "status": "unknown", "message": "No health check yet"}
+    return {"agent": agent.name, **health}
+
+
 @router.get("/{agent_id}/card", response_model=AgentCard)
 async def get_agent_card(agent_id: uuid.UUID):
     async with async_session() as session:
@@ -102,12 +128,26 @@ async def get_agent_card(agent_id: uuid.UUID):
         )
 
 
+async def _fire_webhook(webhook_url: str, payload: dict):
+    """Fire-and-forget webhook notification."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(webhook_url, json=payload)
+        logger.info("Webhook sent to %s", webhook_url)
+    except Exception:
+        logger.warning("Webhook failed for %s", webhook_url)
+
+
 @router.post("/{agent_id}/task")
-async def route_task(agent_id: uuid.UUID, task: dict, request: Request):
+async def route_task(
+    agent_id: uuid.UUID, task: dict, request: Request,
+    background_tasks: BackgroundTasks,
+):
     """Route an A2A task to the target agent (proxy).
 
     Looks up the agent's URL in the registry and forwards the task payload
     to {agent_url}/a2a. Returns the agent's response directly.
+    If the agent has a webhook_url configured, a notification is sent in the background.
     """
     client_ip = request.client.host if request.client else "unknown"
     if not task_limiter.allow(client_ip):
@@ -119,6 +159,7 @@ async def route_task(agent_id: uuid.UUID, task: dict, request: Request):
             raise HTTPException(status_code=404, detail="Agent not found")
 
     agent_name = agent.name
+    webhook_url = agent.webhook_url
     target_url = f"{agent.url.rstrip('/')}/a2a"
     logger.info("Routing task to %s (%s)", agent_name, target_url)
 
@@ -153,4 +194,18 @@ async def route_task(agent_id: uuid.UUID, task: dict, request: Request):
 
     record_request(agent_name, t.elapsed_ms)
     logger.info("Task routed to %s — %d in %.0fms", agent_name, resp.status_code, t.elapsed_ms)
+
+    if webhook_url:
+        background_tasks.add_task(
+            _fire_webhook,
+            webhook_url,
+            {
+                "event": "task.completed",
+                "agent_id": str(agent_id),
+                "agent_name": agent_name,
+                "task_id": task.get("id"),
+                "latency_ms": round(t.elapsed_ms, 1),
+            },
+        )
+
     return resp.json()

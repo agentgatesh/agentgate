@@ -36,15 +36,30 @@ class AgentGateClient:
 
     # --- Registry operations ---
 
-    def list_agents(self) -> list[dict]:
-        """List all registered agents."""
-        r = self._client.get(f"{self.server_url}/agents/")
+    def list_agents(self, skill: str | None = None) -> list[dict]:
+        """List all registered agents. Optionally filter by skill ID or name."""
+        params = {}
+        if skill:
+            params["skill"] = skill
+        r = self._client.get(f"{self.server_url}/agents/", params=params)
         self._raise_for_status(r)
         return r.json()
 
     def get_agent(self, agent_id: str) -> dict:
         """Get a single agent by ID."""
         r = self._client.get(f"{self.server_url}/agents/{agent_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_agent_health(self, agent_id: str) -> dict:
+        """Get health status for an agent."""
+        r = self._client.get(f"{self.server_url}/agents/{agent_id}/health")
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_all_health(self) -> dict:
+        """Get health status for all agents."""
+        r = self._client.get(f"{self.server_url}/health/agents")
         self._raise_for_status(r)
         return r.json()
 
