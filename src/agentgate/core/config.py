@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     redis_url: str = ""
     log_retention_days: int = 30
     log_max_per_agent: int = 10000
+    plugin_config: str = ""
 
 
 settings = Settings()

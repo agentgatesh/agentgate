@@ -56,6 +56,27 @@ class AsyncAgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    async def search_agents(
+        self,
+        q: str | None = None,
+        tags: str | None = None,
+        skill: str | None = None,
+        sort: str = "newest",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict:
+        """Advanced agent search with full-text, multi-tag, and sorting."""
+        params: dict = {"sort": sort, "limit": limit, "offset": offset}
+        if q:
+            params["q"] = q
+        if tags:
+            params["tags"] = tags
+        if skill:
+            params["skill"] = skill
+        r = await self._client.get(f"{self.server_url}/agents/search", params=params)
+        self._raise_for_status(r)
+        return r.json()
+
     async def get_agent(self, agent_id: str) -> dict:
         r = await self._client.get(f"{self.server_url}/agents/{agent_id}")
         self._raise_for_status(r)
