@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing — AgentGate</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        /* Nav */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+        nav .nav-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+        nav .links a.active { color: var(--accent); }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+        /* Auth overlay */
+        .auth-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+        .auth-overlay.hidden { display: none; }
+        .auth-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .auth-box h2 { font-size: 20px; margin-bottom: 8px; }
+        .auth-box p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
+        .auth-box input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .auth-box input:focus { outline: none; border-color: var(--accent); }
+        .auth-box button {
+            width: 100%;
+            padding: 10px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .auth-box button:hover { background: var(--accent-hover); }
+        .auth-error { color: var(--red); font-size: 13px; margin-top: 8px; display: none; }
+
+        /* Page header */
+        .page-header {
+            margin-bottom: 32px;
+        }
+        .page-header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+        .page-header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        /* Cards grid */
+        .cards-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+        }
+        .card-title {
+            font-size: 13px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        /* Stat items */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label { font-size: 14px; color: var(--text-muted); }
+        .stat-value { font-size: 14px; font-weight: 600; }
+        .stat-value.big { font-size: 28px; font-weight: 700; }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red { color: var(--red); }
+        .stat-value.yellow { color: var(--yellow); }
+        .stat-value.accent { color: var(--accent); }
+
+        /* Tier badge */
+        .tier-badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+        }
+        .tier-badge.pro {
+            background: rgba(234, 179, 8, 0.15);
+            color: var(--yellow);
+        }
+        .tier-badge.enterprise {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--green);
+        }
+
+        /* Section */
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        th {
+            background: var(--bg);
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        tr:last-child td { border-bottom: none; }
+        .no-data { color: var(--text-muted); font-style: italic; }
+        .role-payer { color: var(--red); }
+        .role-receiver { color: var(--green); }
+        .type-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 2px 8px;
+            border-radius: 6px;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+        }
+        .type-badge.fee {
+            background: rgba(234, 179, 8, 0.15);
+            color: var(--yellow);
+        }
+        .type-badge.topup {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--green);
+        }
+        .type-badge.charge {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+        }
+
+        /* Action cards */
+        .actions-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        .action-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+        }
+        .action-card h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .action-card p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 10px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+        }
+        .input-group input:focus { outline: none; border-color: var(--accent); }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Tier buttons */
+        .tier-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .tier-btn {
+            padding: 10px 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--bg);
+            color: var(--text);
+            transition: all 0.15s;
+            flex: 1;
+            text-align: center;
+        }
+        .tier-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .tier-btn.current {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            cursor: default;
+        }
+        .tier-btn .tier-price {
+            display: block;
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            font-weight: 400;
+        }
+
+        /* Feedback messages */
+        .msg {
+            font-size: 13px;
+            margin-top: 8px;
+            min-height: 20px;
+        }
+        .msg.error { color: var(--red); }
+        .msg.success { color: var(--green); }
+
+        /* Loading */
+        .loading {
+            color: var(--text-muted);
+            font-size: 14px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .cards-row { grid-template-columns: 1fr; }
+            .actions-row { grid-template-columns: 1fr; }
+            nav .links { gap: 14px; font-size: 13px; }
+            th, td { padding: 10px 12px; font-size: 13px; }
+            .tier-buttons { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/admin">Admin</a>
+            <a href="/marketplace">Marketplace</a>
+            <a href="/billing" class="active">Billing</a>
+            <a href="https://github.com/agentgatesh/agentgate" target="_blank">GitHub</a>
+        </div>
+    </div>
+</nav>
+
+<!-- Auth overlay -->
+<div class="auth-overlay" id="authOverlay">
+    <div class="auth-box">
+        <h2>Billing Dashboard</h2>
+        <p>Enter your organization ID and API key to view billing.</p>
+        <input type="text" id="authOrgId" placeholder="Organization ID">
+        <input type="password" id="authApiKey" placeholder="API Key">
+        <button onclick="authenticate()">Continue</button>
+        <div class="auth-error" id="authError"></div>
+    </div>
+</div>
+
+<div class="container" id="mainContent" style="display:none;">
+    <div class="page-header">
+        <h1>Billing</h1>
+        <p id="orgLabel">Organization billing and usage overview</p>
+    </div>
+
+    <!-- Wallet + Summary -->
+    <div class="cards-row">
+        <!-- Wallet card -->
+        <div class="card" id="walletCard">
+            <div class="card-title">Wallet</div>
+            <div id="walletContent" class="loading">Loading wallet...</div>
+        </div>
+        <!-- Transaction summary card -->
+        <div class="card" id="summaryCard">
+            <div class="card-title">Transaction Summary</div>
+            <div id="summaryContent" class="loading">Loading summary...</div>
+        </div>
+    </div>
+
+    <!-- Actions: Topup + Tier -->
+    <div class="actions-row">
+        <div class="action-card">
+            <h3>Top Up Balance</h3>
+            <p>Add funds to your organization wallet.</p>
+            <div class="input-group">
+                <input type="number" id="topupAmount" placeholder="Amount (e.g. 50.00)" min="0.01" step="0.01">
+                <button class="btn btn-primary" id="topupBtn" onclick="doTopup()">Top Up</button>
+            </div>
+            <div class="msg" id="topupMsg"></div>
+        </div>
+        <div class="action-card">
+            <h3>Change Tier</h3>
+            <p>Switch your organization plan. Changes take effect immediately.</p>
+            <div class="tier-buttons" id="tierButtons">
+                <button class="tier-btn" data-tier="free" onclick="changeTier('free')">
+                    Free
+                    <span class="tier-price">0 / month</span>
+                </button>
+                <button class="tier-btn" data-tier="pro" onclick="changeTier('pro')">
+                    Pro
+                    <span class="tier-price">Premium</span>
+                </button>
+                <button class="tier-btn" data-tier="enterprise" onclick="changeTier('enterprise')">
+                    Enterprise
+                    <span class="tier-price">Custom</span>
+                </button>
+            </div>
+            <div class="msg" id="tierMsg"></div>
+        </div>
+    </div>
+
+    <!-- Recent Transactions -->
+    <h2 class="section-title">Recent Transactions</h2>
+    <div id="txContent" class="loading">Loading transactions...</div>
+</div>
+
+<script>
+    let orgId = '';
+    let apiKey = '';
+    const BASE = '';
+
+    function init() {
+        const params = new URLSearchParams(window.location.search);
+        const pOrg = params.get('org_id');
+        const pKey = params.get('api_key');
+        if (pOrg && pKey) {
+            orgId = pOrg;
+            apiKey = pKey;
+            showDashboard();
+        }
+    }
+
+    function authenticate() {
+        const o = document.getElementById('authOrgId').value.trim();
+        const k = document.getElementById('authApiKey').value.trim();
+        const errEl = document.getElementById('authError');
+        if (!o || !k) {
+            errEl.textContent = 'Both fields are required.';
+            errEl.style.display = 'block';
+            return;
+        }
+        orgId = o;
+        apiKey = k;
+        errEl.style.display = 'none';
+        showDashboard();
+    }
+
+    function showDashboard() {
+        document.getElementById('authOverlay').classList.add('hidden');
+        document.getElementById('mainContent').style.display = 'block';
+        loadAll();
+    }
+
+    function headers() {
+        return {
+            'Authorization': 'Bearer ' + apiKey,
+            'Content-Type': 'application/json'
+        };
+    }
+
+    async function apiFetch(path, opts = {}) {
+        const res = await fetch(BASE + path, { headers: headers(), ...opts });
+        if (!res.ok) {
+            const text = await res.text();
+            let msg = 'Error ' + res.status;
+            try { msg = JSON.parse(text).detail || msg; } catch(e) {}
+            throw new Error(msg);
+        }
+        return res.json();
+    }
+
+    function loadAll() {
+        loadWallet();
+        loadSummary();
+        loadTransactions();
+    }
+
+    // --- Wallet ---
+    async function loadWallet() {
+        const el = document.getElementById('walletContent');
+        el.innerHTML = '<div class="loading">Loading wallet...</div>';
+        try {
+            const w = await apiFetch('/v1/orgs/' + orgId + '/wallet');
+            const tierClass = w.tier === 'pro' ? 'pro' : w.tier === 'enterprise' ? 'enterprise' : '';
+            const limits = w.tier_limits || {};
+            el.innerHTML = `
+                <div class="stat-row">
+                    <span class="stat-label">Balance</span>
+                    <span class="stat-value big green">$${Number(w.balance || 0).toFixed(2)}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Tier</span>
+                    <span class="stat-value"><span class="tier-badge ${tierClass}">${w.tier || 'free'}</span></span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Max Agents</span>
+                    <span class="stat-value">${limits.max_agents != null ? limits.max_agents : '--'}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Rate Limit</span>
+                    <span class="stat-value">${limits.rate_limit != null ? limits.rate_limit + ' req/min' : '--'}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Platform Fee</span>
+                    <span class="stat-value">${limits.fee_pct != null ? limits.fee_pct + '%' : '--'}</span>
+                </div>
+            `;
+            updateTierButtons(w.tier || 'free');
+        } catch (e) {
+            el.innerHTML = '<div class="msg error">' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    // --- Summary ---
+    async function loadSummary() {
+        const el = document.getElementById('summaryContent');
+        el.innerHTML = '<div class="loading">Loading summary...</div>';
+        try {
+            const s = await apiFetch('/v1/orgs/' + orgId + '/transactions/summary');
+            el.innerHTML = `
+                <div class="stat-row">
+                    <span class="stat-label">Total Spent</span>
+                    <span class="stat-value red">-$${Number(s.total_spent || 0).toFixed(2)}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Earned</span>
+                    <span class="stat-value green">+$${Number(s.total_earned || 0).toFixed(2)}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Total Fees</span>
+                    <span class="stat-value yellow">$${Number(s.total_fees || 0).toFixed(2)}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Transactions</span>
+                    <span class="stat-value">${s.tx_count != null ? s.tx_count : (s.total_count != null ? s.total_count : '--')}</span>
+                </div>
+            `;
+        } catch (e) {
+            el.innerHTML = '<div class="msg error">' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    // --- Transactions ---
+    async function loadTransactions() {
+        const el = document.getElementById('txContent');
+        el.innerHTML = '<div class="loading">Loading transactions...</div>';
+        try {
+            const data = await apiFetch('/v1/orgs/' + orgId + '/transactions');
+            const txs = Array.isArray(data) ? data : (data.transactions || data.items || []);
+            if (txs.length === 0) {
+                el.innerHTML = '<table><tr><td class="no-data">No transactions yet.</td></tr></table>';
+                return;
+            }
+            let rows = '';
+            for (const tx of txs) {
+                const date = tx.created_at ? new Date(tx.created_at).toLocaleString() : '--';
+                const agent = tx.agent_name || tx.agent_id || '--';
+                const txType = tx.type || tx.tx_type || '--';
+                const amount = Number(tx.amount || 0).toFixed(2);
+                const fee = Number(tx.fee || tx.platform_fee || 0).toFixed(2);
+                const net = Number(tx.net || (tx.amount - (tx.fee || tx.platform_fee || 0)) || 0).toFixed(2);
+                const role = tx.role || (tx.direction === 'out' ? 'payer' : tx.direction === 'in' ? 'receiver' : '--');
+
+                let typeClass = '';
+                if (txType === 'fee') typeClass = 'fee';
+                else if (txType === 'topup') typeClass = 'topup';
+                else if (txType === 'charge' || txType === 'payment') typeClass = 'charge';
+
+                const roleClass = role === 'payer' ? 'role-payer' : role === 'receiver' ? 'role-receiver' : '';
+
+                rows += `<tr>
+                    <td>${escHtml(date)}</td>
+                    <td>${escHtml(agent)}</td>
+                    <td><span class="type-badge ${typeClass}">${escHtml(txType)}</span></td>
+                    <td>$${amount}</td>
+                    <td>$${fee}</td>
+                    <td>$${net}</td>
+                    <td class="${roleClass}">${escHtml(role)}</td>
+                </tr>`;
+            }
+            el.innerHTML = `<table>
+                <thead><tr>
+                    <th>Date</th>
+                    <th>Agent</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Fee</th>
+                    <th>Net</th>
+                    <th>Role</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+        } catch (e) {
+            el.innerHTML = '<div class="msg error">' + escHtml(e.message) + '</div>';
+        }
+    }
+
+    // --- Topup ---
+    async function doTopup() {
+        const amountInput = document.getElementById('topupAmount');
+        const msg = document.getElementById('topupMsg');
+        const btn = document.getElementById('topupBtn');
+        const amount = parseFloat(amountInput.value);
+        if (!amount || amount <= 0) {
+            msg.className = 'msg error';
+            msg.textContent = 'Enter a valid amount greater than 0.';
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+        msg.className = 'msg';
+        msg.textContent = '';
+        try {
+            await apiFetch('/v1/orgs/' + orgId + '/topup', {
+                method: 'POST',
+                body: JSON.stringify({ amount: amount })
+            });
+            msg.className = 'msg success';
+            msg.textContent = 'Top up successful: $' + amount.toFixed(2) + ' added.';
+            amountInput.value = '';
+            loadWallet();
+            loadSummary();
+            loadTransactions();
+        } catch (e) {
+            msg.className = 'msg error';
+            msg.textContent = e.message;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Top Up';
+        }
+    }
+
+    // --- Tier change ---
+    function updateTierButtons(currentTier) {
+        document.querySelectorAll('.tier-btn').forEach(btn => {
+            btn.classList.toggle('current', btn.dataset.tier === currentTier);
+        });
+    }
+
+    async function changeTier(tier) {
+        const msg = document.getElementById('tierMsg');
+        const btn = document.querySelector(`.tier-btn[data-tier="${tier}"]`);
+        if (btn && btn.classList.contains('current')) return;
+
+        msg.className = 'msg';
+        msg.textContent = 'Changing tier...';
+        try {
+            await apiFetch('/v1/orgs/' + orgId + '/tier', {
+                method: 'POST',
+                body: JSON.stringify({ tier: tier })
+            });
+            msg.className = 'msg success';
+            msg.textContent = 'Tier changed to ' + tier + '.';
+            loadWallet();
+        } catch (e) {
+            msg.className = 'msg error';
+            msg.textContent = e.message;
+        }
+    }
+
+    // --- Util ---
+    function escHtml(str) {
+        const d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    // Enter key support for auth
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !document.getElementById('authOverlay').classList.contains('hidden')) {
+            authenticate();
+        }
+    });
+
+    init();
+</script>
+</body>
+</html>

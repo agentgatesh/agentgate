@@ -2891,3 +2891,311 @@ def test_async_sdk_wallet_methods_exist():
     assert hasattr(c, "topup_org")
     assert hasattr(c, "list_org_transactions")
     assert hasattr(c, "get_org_transaction_summary")
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Tier upgrade/downgrade endpoint
+# ---------------------------------------------------------------------------
+
+
+def test_tier_change_endpoint_requires_auth():
+    import uuid
+    response = client.post(f"/orgs/{uuid.uuid4()}/tier", json={"tier": "pro"})
+    assert response.status_code in (401, 403)
+
+
+def test_v1_tier_change_endpoint_exists():
+    import uuid
+    response = client.post(f"/v1/orgs/{uuid.uuid4()}/tier", json={"tier": "pro"})
+    assert response.status_code in (401, 403)
+
+
+def test_tier_change_endpoint_exists():
+    from agentgate.server.org_routes import change_org_tier
+    assert callable(change_org_tier)
+
+
+def test_tier_change_invalid_tier():
+    """Invalid tier should return 400."""
+    import uuid
+
+    from agentgate.server.org_routes import resolve_org_or_admin
+
+    org_id = uuid.uuid4()
+
+    # Override the dependency to simulate admin (returns None)
+    app.dependency_overrides[resolve_org_or_admin] = lambda: None
+
+    try:
+        response = client.post(
+            f"/orgs/{org_id}/tier",
+            json={"tier": "platinum"},
+            headers={"Authorization": "Bearer admin-key"},
+        )
+        assert response.status_code == 400
+        assert "Invalid tier" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(resolve_org_or_admin, None)
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Billing E2E — _process_billing full flow
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_process_billing_success_charges_payer():
+    """Full billing flow: payer charged, transaction recorded."""
+    from agentgate.server.routes import _process_billing
+
+    agent = MagicMock()
+    agent.id = "agent-id"
+    agent.name = "paid-agent"
+    agent.price_per_task = 1.0
+    agent.org_id = None  # No receiver
+
+    payer_org = MagicMock()
+    payer_org.id = "payer-id"
+    payer_org.name = "payer-org"
+    payer_org.balance = 10.0
+    payer_org.tier = "free"
+
+    mock_payer = MagicMock()
+    mock_payer.balance = 10.0
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_payer)
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        charged, err = await _process_billing(agent, payer_org, "task-123")
+
+    assert charged is True
+    assert err is None
+    # Payer should have been charged
+    assert mock_payer.balance == round(10.0 - 1.0, 4)
+    # Transaction should have been added to session
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_process_billing_with_receiver():
+    """Billing flow with agent owner: receiver gets credited (minus fee)."""
+    import uuid
+
+    from agentgate.server.routes import _process_billing
+
+    payer_id = uuid.uuid4()
+    receiver_id = uuid.uuid4()
+
+    agent = MagicMock()
+    agent.id = uuid.uuid4()
+    agent.name = "premium-agent"
+    agent.price_per_task = 2.0
+    agent.org_id = receiver_id
+
+    payer_org = MagicMock()
+    payer_org.id = payer_id
+    payer_org.name = "payer"
+    payer_org.balance = 50.0
+    payer_org.tier = "pro"  # 2.5% fee
+
+    mock_payer = MagicMock()
+    mock_payer.balance = 50.0
+
+    mock_receiver = MagicMock()
+    mock_receiver.id = receiver_id
+    mock_receiver.balance = 100.0
+
+    async def mock_get(model, obj_id):
+        if obj_id == payer_id:
+            return mock_payer
+        if obj_id == receiver_id:
+            return mock_receiver
+        return None
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(side_effect=mock_get)
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        charged, err = await _process_billing(agent, payer_org, "task-456")
+
+    assert charged is True
+    assert err is None
+    # Payer charged full price
+    assert mock_payer.balance == round(50.0 - 2.0, 4)
+    # Receiver gets net (price minus 2.5% fee)
+    fee = round(2.0 * 0.025, 6)
+    net = round(2.0 - fee, 6)
+    assert mock_receiver.balance == round(100.0 + net, 4)
+
+
+@pytest.mark.asyncio
+async def test_process_billing_enterprise_fee():
+    """Enterprise tier should have 2% fee."""
+    from agentgate.server.routes import _process_billing
+
+    agent = MagicMock()
+    agent.id = "agent-id"
+    agent.name = "ent-agent"
+    agent.price_per_task = 10.0
+    agent.org_id = None
+
+    payer_org = MagicMock()
+    payer_org.id = "payer-id"
+    payer_org.name = "ent-payer"
+    payer_org.balance = 100.0
+    payer_org.tier = "enterprise"
+
+    mock_payer = MagicMock()
+    mock_payer.balance = 100.0
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=mock_payer)
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        charged, err = await _process_billing(agent, payer_org, "task-789")
+
+    assert charged is True
+    # Verify the transaction was recorded with correct fee
+    tx_call = mock_session.add.call_args[0][0]
+    assert tx_call.amount == 10.0
+    assert tx_call.fee == round(10.0 * 0.02, 6)  # 2% enterprise fee
+    assert tx_call.net == round(10.0 - 10.0 * 0.02, 6)
+
+
+def test_route_task_402_insufficient_balance():
+    """Paid agent with org lacking balance should return 402."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+
+    agent = _make_fake_agent(
+        id=agent_id, name="expensive-agent", price_per_task=100.0,
+        api_key_hash=None, org_id=None,
+    )
+
+    mock_org = MagicMock()
+    mock_org.id = org_id
+    mock_org.balance = 1.0
+    mock_org.tier = "free"
+
+    mock_result_agent = MagicMock()
+    mock_result_agent.scalar_one_or_none.return_value = None
+
+    # Build a session that returns the agent for .get() and the org for org lookup
+    mock_session = AsyncMock()
+
+    async def mock_get(model, obj_id):
+        if obj_id == agent_id:
+            return agent
+        return None
+
+    mock_session.get = AsyncMock(side_effect=mock_get)
+
+    # For org lookup by key hash
+    mock_org_result = MagicMock()
+    mock_org_result.scalar_one_or_none.return_value = mock_org
+    mock_session.execute = AsyncMock(return_value=mock_org_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "admin-key"
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+            headers={"Authorization": "Bearer org-key-123"},
+        )
+    assert response.status_code == 402
+    assert "Insufficient balance" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: SDK — tier change methods exist
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_sync_tier_change_method():
+    from agentgate.sdk.client import AgentGateClient
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "change_org_tier")
+    c.close()
+
+
+def test_async_sdk_tier_change_method():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "change_org_tier")
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Pricing page
+# ---------------------------------------------------------------------------
+
+
+def test_pricing_page():
+    response = client.get("/pricing")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Pricing" in response.text
+    assert "AgentGate" in response.text
+
+
+def test_pricing_page_has_tiers():
+    response = client.get("/pricing")
+    html = response.text
+    assert "Free" in html
+    assert "Pro" in html
+    assert "Enterprise" in html
+
+
+# ---------------------------------------------------------------------------
+# FASE 3: Billing dashboard page
+# ---------------------------------------------------------------------------
+
+
+def test_billing_page():
+    response = client.get("/billing")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Billing" in response.text
+    assert "AgentGate" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Landing page has pricing link
+# ---------------------------------------------------------------------------
+
+
+def test_landing_page_has_pricing_link():
+    response = client.get("/")
+    assert "/pricing" in response.text
