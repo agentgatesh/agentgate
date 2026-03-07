@@ -748,3 +748,218 @@ def test_bump_version():
     assert _bump_version("0.1.0", "minor") == "0.2.0"
     assert _bump_version("0.1.0", "major") == "1.0.0"
     assert _bump_version("1.2.3", "patch") == "1.2.4"
+
+
+# ---------------------------------------------------------------------------
+# Agent logs endpoint — GET /agents/{id}/logs (auth required)
+# ---------------------------------------------------------------------------
+
+
+def test_agent_logs_no_auth():
+    import uuid
+
+    response = client.get(f"/agents/{uuid.uuid4()}/logs")
+    assert response.status_code == 401
+
+
+def test_agent_logs_empty():
+    import uuid
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id)
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=agent)
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "test-key"
+        response = client.get(
+            f"/agents/{agent_id}/logs",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# Agent usage endpoint — GET /agents/{id}/usage (auth required)
+# ---------------------------------------------------------------------------
+
+
+def test_agent_usage_no_auth():
+    import uuid
+
+    response = client.get(f"/agents/{uuid.uuid4()}/usage")
+    assert response.status_code == 401
+
+
+def test_agent_usage_success():
+    import uuid
+    from datetime import datetime, timezone
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, name="usage-agent")
+
+    # Mock the aggregation result
+    mock_row = MagicMock()
+    mock_row.total_invocations = 42
+    mock_row.total_errors = 3
+    mock_row.avg_latency_ms = 150.5
+    mock_row.last_invocation = datetime.now(timezone.utc)
+
+    mock_result = MagicMock()
+    mock_result.one.return_value = mock_row
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=agent)
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_ctx)
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.settings") as mock_settings,
+    ):
+        mock_settings.api_key = "test-key"
+        response = client.get(
+            f"/agents/{agent_id}/usage",
+            headers={"Authorization": "Bearer test-key"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["agent_name"] == "usage-agent"
+    assert data["total_invocations"] == 42
+    assert data["total_errors"] == 3
+    assert data["avg_latency_ms"] == 150.5
+
+
+# ---------------------------------------------------------------------------
+# Per-agent API key auth
+# ---------------------------------------------------------------------------
+
+
+def test_agent_create_with_api_key():
+    from agentgate.server.schemas import AgentCreate
+
+    agent = AgentCreate(
+        name="test", url="http://test.com", agent_api_key="secret-123",
+    )
+    assert agent.agent_api_key == "secret-123"
+    # agent_api_key should be excluded from model_dump
+    assert "agent_api_key" not in agent.model_dump()
+
+
+def test_hash_api_key():
+    from agentgate.server.routes import _hash_api_key
+
+    h = _hash_api_key("test-key")
+    assert len(h) == 64  # SHA-256 hex digest
+    assert _hash_api_key("test-key") == h  # Deterministic
+
+
+def test_route_task_per_agent_auth_required():
+    """Agent with api_key_hash should require auth on task routing."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(
+        id=agent_id, name="protected-agent",
+        api_key_hash="abc123",  # Has a key hash → requires auth
+    )
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    with patch("agentgate.server.routes.async_session", mock_factory):
+        # No auth header → should be 401
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+        )
+    assert response.status_code == 401
+
+
+def test_route_task_no_auth_when_no_key_hash():
+    """Agent without api_key_hash should not require auth on task routing."""
+    import uuid
+
+    agent_id = uuid.uuid4()
+    agent = _make_fake_agent(id=agent_id, name="open-agent", api_key_hash=None)
+    mock_factory = _mock_async_session_with_agents([agent])
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {"result": "ok"}
+
+    with (
+        patch("agentgate.server.routes.async_session", mock_factory),
+        patch("agentgate.server.routes.httpx.AsyncClient") as mock_cls,
+    ):
+        mock_inst = AsyncMock()
+        mock_inst.post.return_value = mock_response
+        mock_inst.__aenter__ = AsyncMock(return_value=mock_inst)
+        mock_inst.__aexit__ = AsyncMock(return_value=False)
+        mock_cls.return_value = mock_inst
+
+        response = client.post(
+            f"/agents/{agent_id}/task",
+            json={"id": "t1", "message": {"parts": [{"type": "text", "text": "hi"}]}},
+        )
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# TaskLog model
+# ---------------------------------------------------------------------------
+
+
+def test_task_log_model():
+    from agentgate.db.models import TaskLog
+
+    assert TaskLog.__tablename__ == "task_logs"
+
+
+# ---------------------------------------------------------------------------
+# Landing page features
+# ---------------------------------------------------------------------------
+
+
+def test_landing_page_has_dashboard_link():
+    response = client.get("/")
+    assert "/dashboard" in response.text
+
+
+def test_landing_page_has_new_features():
+    response = client.get("/")
+    html = response.text
+    assert "Per-agent auth" in html
+    assert "Invocation logs" in html
+    assert "Usage tracking" in html
+    assert "Health monitoring" in html
+
+
+# ---------------------------------------------------------------------------
+# Redis fallback — rate limiter works without Redis
+# ---------------------------------------------------------------------------
+
+
+def test_rate_limiter_memory_fallback():
+    from agentgate.server.ratelimit import RateLimiter
+
+    limiter = RateLimiter(rate=10.0, burst=2)
+    assert limiter.allow("test-ip")
+    assert limiter.allow("test-ip")
+    assert not limiter.allow("test-ip")  # Burst exhausted
