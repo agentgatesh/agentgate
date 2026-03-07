@@ -479,6 +479,46 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    # --- UCP (Universal Commerce Protocol) ---
+
+    def ucp_discover(self) -> dict:
+        """Get the UCP discovery profile (/.well-known/ucp)."""
+        r = self._client.get(f"{self.server_url}/.well-known/ucp")
+        self._raise_for_status(r)
+        return r.json()
+
+    def ucp_catalog(self) -> dict:
+        """List paid agents as UCP products."""
+        r = self._client.get(f"{self.server_url}/ucp/catalog")
+        self._raise_for_status(r)
+        return r.json()
+
+    def ucp_checkout_create(self, agent_id: str, task: dict) -> dict:
+        """Create a UCP checkout session for a paid agent task."""
+        headers = self._headers(auth=True)
+        r = self._client.post(
+            f"{self.server_url}/ucp/checkout",
+            json={"agent_id": agent_id, "task": task},
+            headers=headers,
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def ucp_checkout_get(self, session_id: str) -> dict:
+        """Get the status of a UCP checkout session."""
+        r = self._client.get(f"{self.server_url}/ucp/checkout/{session_id}")
+        self._raise_for_status(r)
+        return r.json()
+
+    def ucp_checkout_complete(self, session_id: str) -> dict:
+        """Complete a UCP checkout session (execute task + billing)."""
+        r = self._client.post(
+            f"{self.server_url}/ucp/checkout/{session_id}/complete",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     # --- Discovery & Health ---
 
     def discover(self) -> dict:

@@ -4005,3 +4005,88 @@ def test_task_routing_ucp_metadata():
     assert data["ucp"]["price_per_task"] == 0.50
     assert data["ucp"]["capability"] == "dev.ucp.shopping.checkout"
     assert "result" in data
+
+
+# ---------------------------------------------------------------------------
+# SDK — UCP methods (sync)
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_ucp_discover():
+    """SDK ucp_discover should call /.well-known/ucp."""
+    from agentgate.sdk.client import AgentGateClient
+
+    sdk = AgentGateClient("http://testserver", api_key="test-key")
+    sdk._client = client  # reuse TestClient
+
+    # The well-known endpoint exists
+    response = sdk.ucp_discover()
+    assert "ucp" in response
+    assert response["ucp"]["version"] == "2026-03-01"
+    assert "platform" in response
+
+
+def test_sdk_ucp_catalog():
+    """SDK ucp_catalog should call /ucp/catalog."""
+    from agentgate.sdk.client import AgentGateClient
+
+    sdk = AgentGateClient("http://testserver", api_key="test-key")
+    sdk._client = client
+
+    with patch("agentgate.server.ucp_routes.async_session") as mock_factory:
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_factory.return_value = mock_ctx
+
+        response = sdk.ucp_catalog()
+    assert "products" in response
+    assert response["total"] == 0
+
+
+def test_sdk_ucp_checkout_create():
+    """SDK ucp_checkout_create should POST /ucp/checkout."""
+    from agentgate.sdk.client import AgentGateClient
+
+    sdk = AgentGateClient("http://testserver", api_key="test-key")
+    sdk._client = client
+
+    # Without agent_id → 400
+    from agentgate.sdk.client import AgentGateError
+
+    try:
+        sdk.ucp_checkout_create("", {"id": "t1", "message": "hi"})
+    except AgentGateError as e:
+        assert e.status_code == 400
+
+
+def test_sdk_ucp_checkout_get_missing():
+    """SDK ucp_checkout_get should return 404 for unknown session."""
+    from agentgate.sdk.client import AgentGateClient, AgentGateError
+
+    sdk = AgentGateClient("http://testserver", api_key="test-key")
+    sdk._client = client
+
+    try:
+        sdk.ucp_checkout_get("nonexistent-session")
+        assert False, "Should have raised"
+    except AgentGateError as e:
+        assert e.status_code == 404
+
+
+def test_sdk_ucp_checkout_complete_missing():
+    """SDK ucp_checkout_complete should return 404 for unknown session."""
+    from agentgate.sdk.client import AgentGateClient, AgentGateError
+
+    sdk = AgentGateClient("http://testserver", api_key="test-key")
+    sdk._client = client
+
+    try:
+        sdk.ucp_checkout_complete("nonexistent-session")
+        assert False, "Should have raised"
+    except AgentGateError as e:
+        assert e.status_code == 404
