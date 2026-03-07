@@ -210,6 +210,83 @@ def deploy(path: str, server: str, api_key: str):
         raise SystemExit(1)
 
 
+@cli.command()
+@click.argument("agent_id")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
+@click.option("--limit", default=20, help="Number of logs to show.")
+def logs(agent_id: str, server: str, api_key: str, limit: int):
+    """Show invocation logs for an agent."""
+    try:
+        r = httpx.get(
+            f"{server}/agents/{agent_id}/logs",
+            params={"limit": limit},
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+
+    if r.status_code != 200:
+        click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+        raise SystemExit(1)
+
+    entries = r.json()
+    if not entries:
+        click.echo("No logs found for this agent.")
+        return
+
+    click.echo(f"{'TIME':<22} {'STATUS':<10} {'LATENCY':<10} {'CALLER IP':<16} {'TASK ID'}")
+    click.echo("-" * 80)
+    for log in entries:
+        ts = log["created_at"][:19].replace("T", " ")
+        status = log["status"]
+        latency = f"{log['latency_ms']}ms"
+        ip = log["caller_ip"]
+        tid = log.get("task_id") or "-"
+        click.echo(f"{ts:<22} {status:<10} {latency:<10} {ip:<16} {tid}")
+    click.echo(f"\n{len(entries)} log(s) shown.")
+
+
+@cli.command()
+@click.argument("agent_id")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
+def usage(agent_id: str, server: str, api_key: str):
+    """Show usage stats for an agent."""
+    try:
+        r = httpx.get(
+            f"{server}/agents/{agent_id}/usage",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+
+    if r.status_code != 200:
+        click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+        raise SystemExit(1)
+
+    data = r.json()
+    click.echo(f"Agent: {data['agent_name']} ({data['agent_id']})")
+    click.echo(f"  Total invocations: {data['total_invocations']}")
+    click.echo(f"  Total errors:      {data['total_errors']}")
+    click.echo(f"  Avg latency:       {data['avg_latency_ms']}ms")
+    last = data.get("last_invocation")
+    if last:
+        click.echo(f"  Last invocation:   {last[:19].replace('T', ' ')}")
+    else:
+        click.echo("  Last invocation:   never")
+
+
 def _bump_version(current: str, part: str) -> str:
     """Bump a semver version string."""
     major, minor, patch = [int(x) for x in current.split(".")]

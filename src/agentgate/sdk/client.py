@@ -117,21 +117,53 @@ class AgentGateClient:
 
     # --- A2A communication ---
 
-    def send_task(self, agent_id: str, text: str, task_id: str = "task-1") -> dict:
+    def send_task(
+        self,
+        agent_id: str,
+        text: str,
+        task_id: str = "task-1",
+        agent_api_key: str | None = None,
+    ) -> dict:
         """Send an A2A task to an agent via AgentGate routing.
 
         Args:
             agent_id: The agent ID (UUID) registered on AgentGate
             text: The text message to send
             task_id: Optional task identifier
+            agent_api_key: Optional per-agent API key (if agent requires auth)
         """
         payload = {
             "id": task_id,
             "message": {"parts": [{"type": "text", "text": text}]},
         }
+        headers = {"Content-Type": "application/json"}
+        if agent_api_key:
+            headers["Authorization"] = f"Bearer {agent_api_key}"
         r = self._client.post(
             f"{self.server_url}/agents/{agent_id}/task",
             json=payload,
+            headers=headers,
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_agent_logs(
+        self, agent_id: str, limit: int = 50, offset: int = 0,
+    ) -> list[dict]:
+        """Get invocation logs for an agent. Requires API key."""
+        r = self._client.get(
+            f"{self.server_url}/agents/{agent_id}/logs",
+            params={"limit": limit, "offset": offset},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_agent_usage(self, agent_id: str) -> dict:
+        """Get usage stats for an agent. Requires API key."""
+        r = self._client.get(
+            f"{self.server_url}/agents/{agent_id}/usage",
+            headers=self._headers(auth=True),
         )
         self._raise_for_status(r)
         return r.json()

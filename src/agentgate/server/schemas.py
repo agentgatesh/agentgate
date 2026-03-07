@@ -11,6 +11,7 @@ class AgentCreate(BaseModel):
     version: str = "1.0.0"
     skills: list[dict] = []
     webhook_url: str | None = None
+    agent_api_key: str | None = Field(default=None, exclude=True)
 
 
 class AgentUpdate(BaseModel):
@@ -20,6 +21,7 @@ class AgentUpdate(BaseModel):
     version: str | None = None
     skills: list[dict] | None = None
     webhook_url: str | None = None
+    agent_api_key: str | None = Field(default=None, exclude=True)
 
 
 class AgentResponse(BaseModel):

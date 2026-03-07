@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     debug: bool = False
     secret_key: str = "changeme"
     api_key: str = ""
+    redis_url: str = ""
 
 
 settings = Settings()
