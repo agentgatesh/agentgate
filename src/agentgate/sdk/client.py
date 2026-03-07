@@ -168,6 +168,18 @@ class AgentGateClient:
         self._raise_for_status(r)
         return r.json()
 
+    def get_usage_breakdown(
+        self, agent_id: str, period: str = "day", days: int = 30,
+    ) -> dict:
+        """Get usage breakdown by day or month. Requires API key."""
+        r = self._client.get(
+            f"{self.server_url}/agents/{agent_id}/usage/breakdown",
+            params={"period": period, "days": days},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
     def discover(self) -> dict:
         """Get the .well-known/agent.json discovery document."""
         r = self._client.get(f"{self.server_url}/.well-known/agent.json")

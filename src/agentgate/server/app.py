@@ -11,7 +11,9 @@ from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
 from agentgate.server.healthcheck import get_all_health, health_check_loop
+from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
+from agentgate.server.org_routes import router as orgs_router
 from agentgate.server.routes import router as agents_router
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -23,9 +25,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 async def lifespan(app: FastAPI):
     import asyncio
 
-    task = asyncio.create_task(health_check_loop())
+    health_task = asyncio.create_task(health_check_loop())
+    retention_task = asyncio.create_task(log_retention_loop())
     yield
-    task.cancel()
+    health_task.cancel()
+    retention_task.cancel()
 
 
 app = FastAPI(
@@ -36,6 +40,7 @@ app = FastAPI(
 )
 
 app.include_router(agents_router)
+app.include_router(orgs_router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -51,6 +56,11 @@ async def health():
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
     return (STATIC_DIR / "dashboard.html").read_text()
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page():
+    return (STATIC_DIR / "admin.html").read_text()
 
 
 @app.get("/health/agents")

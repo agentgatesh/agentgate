@@ -287,6 +287,49 @@ def usage(agent_id: str, server: str, api_key: str):
         click.echo("  Last invocation:   never")
 
 
+@cli.command()
+@click.argument("agent_id")
+@click.option("--server", default=DEFAULT_SERVER, help="AgentGate server URL.")
+@click.option(
+    "--api-key", envvar="AGENTGATE_API_KEY", required=True,
+    help="API key (or set AGENTGATE_API_KEY).",
+)
+@click.option("--period", default="day", type=click.Choice(["day", "month"]),
+              help="Group by day or month.")
+@click.option("--days", default=30, help="Number of days to look back.")
+def billing(agent_id: str, server: str, api_key: str, period: str, days: int):
+    """Show usage breakdown for an agent by day or month."""
+    try:
+        r = httpx.get(
+            f"{server}/agents/{agent_id}/usage/breakdown",
+            params={"period": period, "days": days},
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=10,
+        )
+    except httpx.ConnectError:
+        click.echo(f"Error: cannot reach server at {server}", err=True)
+        raise SystemExit(1)
+
+    if r.status_code != 200:
+        click.echo(f"Error ({r.status_code}): {r.text}", err=True)
+        raise SystemExit(1)
+
+    data = r.json()
+    click.echo(f"Agent: {data['agent_name']} — {period}ly breakdown (last {days} days)")
+    breakdown = data.get("breakdown", [])
+    if not breakdown:
+        click.echo("No data in this period.")
+        return
+
+    click.echo(f"\n{'PERIOD':<14} {'INVOCATIONS':<14} {'ERRORS':<10} {'AVG LATENCY'}")
+    click.echo("-" * 52)
+    for row in breakdown:
+        p = row["period"][:10] if period == "day" else row["period"][:7]
+        click.echo(
+            f"{p:<14} {row['invocations']:<14} {row['errors']:<10} {row['avg_latency_ms']}ms"
+        )
+
+
 def _bump_version(current: str, part: str) -> str:
     """Bump a semver version string."""
     major, minor, patch = [int(x) for x in current.split(".")]
