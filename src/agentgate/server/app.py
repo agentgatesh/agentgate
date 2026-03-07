@@ -10,6 +10,7 @@ from agentgate import __version__
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.chain_routes import router as chains_router
 from agentgate.server.healthcheck import get_all_health, health_check_loop
 from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
@@ -54,8 +55,10 @@ app = FastAPI(
 # Mount routers at both / (backward compat) and /v1/ (versioned API)
 app.include_router(agents_router)
 app.include_router(orgs_router)
+app.include_router(chains_router)
 app.include_router(agents_router, prefix="/v1")
 app.include_router(orgs_router, prefix="/v1")
+app.include_router(chains_router, prefix="/v1")
 
 
 @app.get("/", response_class=HTMLResponse)

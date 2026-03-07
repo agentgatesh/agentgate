@@ -2161,3 +2161,451 @@ def test_ratelimits_html_exists():
         / "src/agentgate/server/static/ratelimits.html"
     )
     assert html.exists()
+
+
+# ---------------------------------------------------------------------------
+# Reviews — Model & Schema
+# ---------------------------------------------------------------------------
+
+
+def test_review_model_fields():
+    from agentgate.db.models import Review
+
+    assert hasattr(Review, "id")
+    assert hasattr(Review, "agent_id")
+    assert hasattr(Review, "rating")
+    assert hasattr(Review, "comment")
+    assert hasattr(Review, "reviewer")
+    assert hasattr(Review, "created_at")
+
+
+def test_review_create_schema_valid():
+    from agentgate.server.schemas import ReviewCreate
+
+    r = ReviewCreate(rating=5, comment="Great!", reviewer="alice")
+    assert r.rating == 5
+    assert r.comment == "Great!"
+    assert r.reviewer == "alice"
+
+
+def test_review_create_schema_defaults():
+    from agentgate.server.schemas import ReviewCreate
+
+    r = ReviewCreate(rating=3)
+    assert r.comment == ""
+    assert r.reviewer == "anonymous"
+
+
+def test_review_create_schema_rating_bounds():
+    from pydantic import ValidationError
+
+    from agentgate.server.schemas import ReviewCreate
+
+    with pytest.raises(ValidationError):
+        ReviewCreate(rating=0)
+    with pytest.raises(ValidationError):
+        ReviewCreate(rating=6)
+
+
+def test_review_response_schema():
+    import uuid
+    from datetime import datetime
+
+    from agentgate.server.schemas import ReviewResponse
+
+    r = ReviewResponse(
+        id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        rating=4,
+        comment="nice",
+        reviewer="bob",
+        created_at=datetime.now(),
+    )
+    assert r.rating == 4
+    assert r.reviewer == "bob"
+
+
+# ---------------------------------------------------------------------------
+# Reviews — API endpoints (mocked DB)
+# ---------------------------------------------------------------------------
+
+
+@patch("agentgate.server.routes.async_session")
+def test_create_review_agent_not_found(mock_session):
+    mock_sess = AsyncMock()
+    mock_sess.get = AsyncMock(return_value=None)
+    mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = client.post(
+        "/agents/00000000-0000-0000-0000-000000000001/reviews",
+        json={"rating": 5, "comment": "test"},
+    )
+    assert response.status_code == 404
+
+
+@patch("agentgate.server.routes.async_session")
+def test_create_review_success(mock_session):
+    import uuid
+    from datetime import datetime, timezone
+
+    mock_agent = MagicMock()
+    mock_agent.id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    review_id = uuid.uuid4()
+    mock_review = MagicMock()
+    mock_review.id = review_id
+    mock_review.agent_id = mock_agent.id
+    mock_review.rating = 5
+    mock_review.comment = "Excellent"
+    mock_review.reviewer = "tester"
+    mock_review.created_at = datetime.now(timezone.utc)
+
+    mock_sess = AsyncMock()
+    mock_sess.get = AsyncMock(return_value=mock_agent)
+    mock_sess.add = MagicMock()
+    mock_sess.commit = AsyncMock()
+
+    async def fake_refresh(obj):
+        obj.id = mock_review.id
+        obj.agent_id = mock_review.agent_id
+        obj.rating = mock_review.rating
+        obj.comment = mock_review.comment
+        obj.reviewer = mock_review.reviewer
+        obj.created_at = mock_review.created_at
+
+    mock_sess.refresh = fake_refresh
+    mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = client.post(
+        "/agents/00000000-0000-0000-0000-000000000001/reviews",
+        json={"rating": 5, "comment": "Excellent", "reviewer": "tester"},
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["rating"] == 5
+    assert data["comment"] == "Excellent"
+    assert data["reviewer"] == "tester"
+
+
+@patch("agentgate.server.routes.async_session")
+def test_list_reviews_agent_not_found(mock_session):
+    mock_sess = AsyncMock()
+    mock_sess.get = AsyncMock(return_value=None)
+    mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = client.get("/agents/00000000-0000-0000-0000-000000000001/reviews")
+    assert response.status_code == 404
+
+
+@patch("agentgate.server.routes.async_session")
+def test_review_stats_agent_not_found(mock_session):
+    mock_sess = AsyncMock()
+    mock_sess.get = AsyncMock(return_value=None)
+    mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = client.get(
+        "/agents/00000000-0000-0000-0000-000000000001/reviews/stats",
+    )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Reviews — search includes avg_rating/review_count
+# ---------------------------------------------------------------------------
+
+
+@patch("agentgate.server.routes.async_session")
+def test_search_sort_by_rating_accepted(mock_session):
+    """Verify that sort=rating is accepted (doesn't return 422)."""
+    mock_agent = MagicMock()
+    mock_agent.id = "00000000-0000-0000-0000-000000000001"
+    mock_agent.name = "test"
+    mock_agent.description = "desc"
+    mock_agent.url = "http://test"
+    mock_agent.version = "1.0"
+    mock_agent.skills = []
+    mock_agent.tags = []
+    mock_agent.org_id = None
+    mock_agent.created_at = MagicMock(isoformat=MagicMock(return_value="2026-01-01"))
+    mock_agent.updated_at = MagicMock(isoformat=MagicMock(return_value="2026-01-01"))
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [mock_agent]
+
+    # Need two execute calls: one for agents, one for review stats
+    mock_review_result = MagicMock()
+    mock_review_result.all.return_value = []
+
+    mock_sess = AsyncMock()
+    mock_sess.execute = AsyncMock(side_effect=[mock_result, mock_review_result])
+    mock_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = client.get("/agents/search?sort=rating")
+    assert response.status_code == 200
+    data = response.json()
+    assert "agents" in data
+
+
+# ---------------------------------------------------------------------------
+# Reviews — migration file exists
+# ---------------------------------------------------------------------------
+
+
+def test_reviews_chains_migration_exists():
+    from pathlib import Path
+
+    migration = (
+        Path(__file__).parent.parent
+        / "src/agentgate/db/migrations/versions/g7h8i9j0k1l2_reviews_and_chains.py"
+    )
+    assert migration.exists()
+
+
+# ---------------------------------------------------------------------------
+# Chains — Model & Schema
+# ---------------------------------------------------------------------------
+
+
+def test_chain_model_fields():
+    from agentgate.db.models import Chain
+
+    assert hasattr(Chain, "id")
+    assert hasattr(Chain, "name")
+    assert hasattr(Chain, "description")
+    assert hasattr(Chain, "steps")
+    assert hasattr(Chain, "org_id")
+    assert hasattr(Chain, "created_at")
+    assert hasattr(Chain, "updated_at")
+
+
+def test_chain_create_schema_valid():
+    from agentgate.server.schemas import ChainCreate, ChainStep
+
+    c = ChainCreate(
+        name="my-chain",
+        steps=[ChainStep(agent_id="abc-123")],
+    )
+    assert c.name == "my-chain"
+    assert len(c.steps) == 1
+    assert c.steps[0].agent_id == "abc-123"
+
+
+def test_chain_create_schema_requires_steps():
+    from pydantic import ValidationError
+
+    from agentgate.server.schemas import ChainCreate
+
+    with pytest.raises(ValidationError):
+        ChainCreate(name="empty", steps=[])
+
+
+def test_chain_step_input_template():
+    from agentgate.server.schemas import ChainStep
+
+    step = ChainStep(agent_id="x", input_template="Translate: {previous}")
+    assert step.input_template == "Translate: {previous}"
+
+
+def test_chain_update_schema():
+    from agentgate.server.schemas import ChainUpdate
+
+    u = ChainUpdate(name="renamed")
+    assert u.name == "renamed"
+    assert u.steps is None
+
+
+def test_chain_response_schema():
+    import uuid
+    from datetime import datetime
+
+    from agentgate.server.schemas import ChainResponse
+
+    r = ChainResponse(
+        id=uuid.uuid4(),
+        name="test-chain",
+        description="desc",
+        steps=[{"agent_id": "a"}],
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    )
+    assert r.name == "test-chain"
+
+
+# ---------------------------------------------------------------------------
+# Chains — API endpoints (mocked DB)
+# ---------------------------------------------------------------------------
+
+
+@patch("agentgate.server.routes.async_session")
+@patch("agentgate.server.chain_routes.async_session")
+def test_create_chain_requires_auth(mock_chain_session, mock_routes_session):
+    response = client.post(
+        "/chains/",
+        json={
+            "name": "test-chain",
+            "steps": [{"agent_id": "00000000-0000-0000-0000-000000000001"}],
+        },
+    )
+    # No auth header => 401 or 403
+    assert response.status_code in (401, 403)
+
+
+@patch("agentgate.server.routes.async_session")
+@patch("agentgate.server.chain_routes.async_session")
+def test_get_chain_not_found(mock_chain_session, mock_routes_session):
+    mock_sess = AsyncMock()
+    mock_sess.get = AsyncMock(return_value=None)
+    mock_chain_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_chain_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    # Mock routes session for verify_api_key_or_org
+    mock_routes_session.return_value.__aenter__ = AsyncMock(return_value=mock_sess)
+    mock_routes_session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+    response = client.get(
+        "/chains/00000000-0000-0000-0000-000000000001",
+        headers={"Authorization": "Bearer test-api-key"},
+    )
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Chains — _extract_text helper
+# ---------------------------------------------------------------------------
+
+
+def test_extract_text_a2a_result_artifacts():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {
+        "result": {
+            "artifacts": [
+                {"parts": [{"type": "text", "text": "Hello from artifact"}]}
+            ]
+        }
+    }
+    assert _extract_text(resp) == "Hello from artifact"
+
+
+def test_extract_text_a2a_result_message():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {
+        "result": {
+            "message": {
+                "parts": [{"type": "text", "text": "Hello from message"}]
+            }
+        }
+    }
+    assert _extract_text(resp) == "Hello from message"
+
+
+def test_extract_text_direct_message():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {
+        "message": {
+            "parts": [{"type": "text", "text": "Direct message"}]
+        }
+    }
+    assert _extract_text(resp) == "Direct message"
+
+
+def test_extract_text_result_string():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {"result": "plain string result"}
+    assert _extract_text(resp) == "plain string result"
+
+
+def test_extract_text_text_field():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {"text": "simple text"}
+    assert _extract_text(resp) == "simple text"
+
+
+def test_extract_text_fallback_json():
+    from agentgate.server.chain_routes import _extract_text
+
+    resp = {"foo": "bar"}
+    result = _extract_text(resp)
+    assert "foo" in result
+    assert "bar" in result
+
+
+# ---------------------------------------------------------------------------
+# Chains — router mounted at /v1
+# ---------------------------------------------------------------------------
+
+
+def test_chains_v1_routing():
+    """Verify /v1/chains/ is mounted."""
+    response = client.post(
+        "/v1/chains/",
+        json={
+            "name": "test",
+            "steps": [{"agent_id": "00000000-0000-0000-0000-000000000001"}],
+        },
+    )
+    # Should fail with 401/403 (no auth), not 404 (route not found)
+    assert response.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# SDK — review methods exist
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_review_methods_exist():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "create_review")
+    assert hasattr(c, "list_reviews")
+    assert hasattr(c, "get_review_stats")
+    c.close()
+
+
+def test_async_sdk_review_methods_exist():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "create_review")
+    assert hasattr(c, "list_reviews")
+    assert hasattr(c, "get_review_stats")
+
+
+# ---------------------------------------------------------------------------
+# SDK — chain methods exist
+# ---------------------------------------------------------------------------
+
+
+def test_sdk_chain_methods_exist():
+    from agentgate.sdk.client import AgentGateClient
+
+    c = AgentGateClient("http://localhost:8000")
+    assert hasattr(c, "create_chain")
+    assert hasattr(c, "list_chains")
+    assert hasattr(c, "get_chain")
+    assert hasattr(c, "update_chain")
+    assert hasattr(c, "delete_chain")
+    assert hasattr(c, "run_chain")
+    c.close()
+
+
+def test_async_sdk_chain_methods_exist():
+    from agentgate.sdk.async_client import AsyncAgentGateClient
+
+    c = AsyncAgentGateClient("http://localhost:8000")
+    assert hasattr(c, "create_chain")
+    assert hasattr(c, "list_chains")
+    assert hasattr(c, "get_chain")
+    assert hasattr(c, "update_chain")
+    assert hasattr(c, "delete_chain")
+    assert hasattr(c, "run_chain")

@@ -72,6 +72,54 @@ class OrgResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    comment: str = ""
+    reviewer: str = "anonymous"
+
+
+class ReviewResponse(BaseModel):
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    rating: int
+    comment: str
+    reviewer: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ChainStep(BaseModel):
+    agent_id: str
+    input_template: str | None = None
+    agent_api_key: str | None = Field(default=None, exclude=True)
+
+
+class ChainCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: str = ""
+    steps: list[ChainStep] = Field(..., min_length=1)
+    org_id: uuid.UUID | None = None
+
+
+class ChainUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    steps: list[ChainStep] | None = None
+
+
+class ChainResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    steps: list[dict]
+    org_id: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class AgentCard(BaseModel):
     """A2A-compliant Agent Card."""
 

@@ -22,12 +22,19 @@ from sse_starlette.sse import EventSourceResponse
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import Agent, Organization, TaskLog
+from agentgate.db.models import Agent, Organization, Review, TaskLog
 from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
 from agentgate.server.plugins import plugin_manager
 from agentgate.server.ratelimit import RateLimiter, task_limiter
-from agentgate.server.schemas import AgentCard, AgentCreate, AgentResponse, AgentUpdate
+from agentgate.server.schemas import (
+    AgentCard,
+    AgentCreate,
+    AgentResponse,
+    AgentUpdate,
+    ReviewCreate,
+    ReviewResponse,
+)
 
 logger = logging.getLogger("agentgate.routing")
 
@@ -137,7 +144,7 @@ async def search_agents(
     q: str | None = Query(default=None, description="Full-text search query"),
     tags: str | None = Query(default=None, description="Comma-separated tags (AND logic)"),
     skill: str | None = Query(default=None, description="Filter by skill id or name"),
-    sort: str | None = Query(default="newest", pattern="^(newest|name|version)$"),
+    sort: str | None = Query(default="newest", pattern="^(newest|name|version|rating)$"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
@@ -146,12 +153,28 @@ async def search_agents(
     - q: search name, description, skills, and tags
     - tags: comma-separated list (all must match)
     - skill: filter by skill id or name
-    - sort: newest (default), name, version
+    - sort: newest (default), name, version, rating
     """
     async with async_session() as session:
         query = select(Agent).order_by(Agent.created_at.desc())
         result = await session.execute(query)
         agents = list(result.scalars().all())
+
+        # Fetch review stats for all agents
+        review_result = await session.execute(
+            select(
+                Review.agent_id,
+                func.count(Review.id).label("review_count"),
+                func.avg(Review.rating).label("avg_rating"),
+            ).group_by(Review.agent_id)
+        )
+        review_stats = {
+            row.agent_id: {
+                "review_count": row.review_count,
+                "avg_rating": round(float(row.avg_rating), 2),
+            }
+            for row in review_result.all()
+        }
 
     # Full-text search across name, description, skills, tags
     if q:
@@ -197,6 +220,11 @@ async def search_agents(
         agents.sort(key=lambda a: a.name.lower())
     elif sort == "version":
         agents.sort(key=lambda a: a.version, reverse=True)
+    elif sort == "rating":
+        agents.sort(
+            key=lambda a: review_stats.get(a.id, {}).get("avg_rating", 0),
+            reverse=True,
+        )
 
     total = len(agents)
     agents = agents[offset:offset + limit]
@@ -215,6 +243,8 @@ async def search_agents(
                 "skills": a.skills,
                 "tags": a.tags or [],
                 "org_id": str(a.org_id) if a.org_id else None,
+                "avg_rating": review_stats.get(a.id, {}).get("avg_rating"),
+                "review_count": review_stats.get(a.id, {}).get("review_count", 0),
                 "created_at": a.created_at.isoformat(),
                 "updated_at": a.updated_at.isoformat(),
             }
@@ -460,6 +490,80 @@ async def get_agent_usage_breakdown(
             }
             for row in rows
         ],
+    }
+
+
+@router.post("/{agent_id}/reviews", response_model=ReviewResponse, status_code=201)
+async def create_review(agent_id: uuid.UUID, data: ReviewCreate):
+    """Submit a review for an agent (1-5 stars). No auth required."""
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        review = Review(
+            agent_id=agent_id,
+            rating=data.rating,
+            comment=data.comment,
+            reviewer=data.reviewer,
+        )
+        session.add(review)
+        await session.commit()
+        await session.refresh(review)
+        return review
+
+
+@router.get("/{agent_id}/reviews", response_model=list[ReviewResponse])
+async def list_reviews(
+    agent_id: uuid.UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """Get reviews for an agent, newest first."""
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        result = await session.execute(
+            select(Review)
+            .where(Review.agent_id == agent_id)
+            .order_by(desc(Review.created_at))
+            .offset(offset)
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+
+@router.get("/{agent_id}/reviews/stats")
+async def review_stats(agent_id: uuid.UUID):
+    """Get aggregate review stats for an agent."""
+    async with async_session() as session:
+        agent = await session.get(Agent, agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        result = await session.execute(
+            select(
+                func.count(Review.id).label("review_count"),
+                func.avg(Review.rating).label("avg_rating"),
+                func.count(Review.id).filter(Review.rating == 5).label("five_star"),
+                func.count(Review.id).filter(Review.rating == 4).label("four_star"),
+                func.count(Review.id).filter(Review.rating == 3).label("three_star"),
+                func.count(Review.id).filter(Review.rating == 2).label("two_star"),
+                func.count(Review.id).filter(Review.rating == 1).label("one_star"),
+            ).where(Review.agent_id == agent_id)
+        )
+        row = result.one()
+    return {
+        "agent_id": str(agent_id),
+        "agent_name": agent.name,
+        "review_count": row.review_count,
+        "avg_rating": round(row.avg_rating, 2) if row.avg_rating else None,
+        "distribution": {
+            "5": row.five_star,
+            "4": row.four_star,
+            "3": row.three_star,
+            "2": row.two_star,
+            "1": row.one_star,
+        },
     }
 
 

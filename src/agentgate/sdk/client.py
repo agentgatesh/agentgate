@@ -168,6 +168,36 @@ class AgentGateClient:
         )
         self._raise_for_status(r)
 
+    # --- Reviews ---
+
+    def create_review(
+        self, agent_id: str, rating: int, comment: str = "", reviewer: str = "anonymous",
+    ) -> dict:
+        """Submit a review for an agent (1-5 stars)."""
+        r = self._client.post(
+            f"{self.server_url}/agents/{agent_id}/reviews",
+            json={"rating": rating, "comment": comment, "reviewer": reviewer},
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_reviews(
+        self, agent_id: str, limit: int = 50, offset: int = 0,
+    ) -> list[dict]:
+        """Get reviews for an agent."""
+        r = self._client.get(
+            f"{self.server_url}/agents/{agent_id}/reviews",
+            params={"limit": limit, "offset": offset},
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_review_stats(self, agent_id: str) -> dict:
+        """Get aggregate review stats for an agent."""
+        r = self._client.get(f"{self.server_url}/agents/{agent_id}/reviews/stats")
+        self._raise_for_status(r)
+        return r.json()
+
     # --- A2A communication ---
 
     def send_task(
@@ -228,6 +258,66 @@ class AgentGateClient:
         r = self._client.get(
             f"{self.server_url}/agents/{agent_id}/usage/breakdown",
             params={"period": period, "days": days},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    # --- Chains ---
+
+    def create_chain(
+        self, name: str, steps: list[dict], description: str = "",
+    ) -> dict:
+        """Create a named chain of agent steps. Requires API key."""
+        r = self._client.post(
+            f"{self.server_url}/chains/",
+            json={"name": name, "description": description, "steps": steps},
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def list_chains(self) -> list[dict]:
+        """List all chains. Requires API key."""
+        r = self._client.get(
+            f"{self.server_url}/chains/",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def get_chain(self, chain_id: str) -> dict:
+        """Get a chain by ID."""
+        r = self._client.get(
+            f"{self.server_url}/chains/{chain_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def update_chain(self, chain_id: str, **fields) -> dict:
+        """Update a chain."""
+        r = self._client.put(
+            f"{self.server_url}/chains/{chain_id}",
+            json=fields,
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+        return r.json()
+
+    def delete_chain(self, chain_id: str) -> None:
+        """Delete a chain."""
+        r = self._client.delete(
+            f"{self.server_url}/chains/{chain_id}",
+            headers=self._headers(auth=True),
+        )
+        self._raise_for_status(r)
+
+    def run_chain(self, chain_id: str, input_text: str) -> dict:
+        """Execute a chain with an initial input. Requires API key."""
+        r = self._client.post(
+            f"{self.server_url}/chains/{chain_id}/run",
+            json={"input": input_text},
             headers=self._headers(auth=True),
         )
         self._raise_for_status(r)
