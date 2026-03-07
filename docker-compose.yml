@@ -41,5 +41,13 @@ services:
     ports:
       - "127.0.0.1:9001:9001"
 
+  chain-agent:
+    build: examples/chain-agent
+    restart: unless-stopped
+    environment:
+      AGENTGATE_URL: http://api:8000
+    ports:
+      - "127.0.0.1:9002:9002"
+
 volumes:
   pgdata:

@@ -1,0 +1,8 @@
+name: chain-agent
+description: Chains multiple agents together via AgentGate. Sends math to calc-agent, then echoes the result via echo-agent.
+url: https://agentgate.sh/chain
+version: "1.0.0"
+skills:
+  - id: chain
+    name: Chain
+    description: Chains calc-agent and echo-agent together to compute and echo math expressions
