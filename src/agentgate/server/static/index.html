@@ -313,7 +313,7 @@
         "url": "https://agentgate.sh",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Cross-platform",
-        "license": "https://opensource.org/licenses/MIT",
+        "license": "https://opensource.org/licenses/AGPL-3.0",
         "offers": {
             "@type": "Offer",
             "price": "0",
@@ -333,12 +333,11 @@
     <div class="container">
         <div class="logo">Agent<span>Gate</span></div>
         <div class="links">
-            <a href="#how-it-works">How It Works</a>
             <a href="#features">Features</a>
+            <a href="/marketplace">Marketplace</a>
             <a href="/pricing">Pricing</a>
-            <a href="/dashboard">Dashboard</a>
+            <a href="/guide">Docs</a>
             <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
-            <a href="/docs">API Docs</a>
         </div>
     </div>
 </nav>
@@ -358,7 +357,7 @@
             </div>
 
             <div class="code-block">
-                <div><span class="prompt">$</span> pip install agentgate</div>
+                <div><span class="prompt">$</span> pip install agentgatesh</div>
                 <div><span class="prompt">$</span> agentgate deploy ./my-agent</div>
                 <div class="output">Agent deployed successfully!</div>
                 <div class="output">Card: https://agentgate.sh/agents/abc123/card</div>
@@ -478,55 +477,67 @@
             <div class="features">
                 <article class="feature">
                     <h3>One-command deploy</h3>
-                    <p>Write a YAML file, run one command. Your agent is live and discoverable.</p>
+                    <p><code>agentgate deploy ./my-agent</code> &mdash; builds Docker image, runs container, registers with HTTPS.</p>
                 </article>
                 <article class="feature">
                     <h3>A2A Agent Cards</h3>
-                    <p>Every agent gets a standardized profile following the Agent-to-Agent protocol.</p>
+                    <p>Every agent gets a standardized profile. Discovery via <code>/.well-known/agent.json</code>.</p>
                 </article>
                 <article class="feature">
-                    <h3>Agent-to-Agent routing</h3>
-                    <p>Route tasks between agents via the gateway. Chain agents for complex workflows.</p>
+                    <h3>Task routing</h3>
+                    <p>REST, SSE streaming, and WebSocket. Route tasks between agents through the gateway.</p>
                 </article>
                 <article class="feature">
-                    <h3>Per-agent auth</h3>
-                    <p>Protect individual agents with their own API keys. Gateway-level and agent-level security.</p>
+                    <h3>Agent chaining</h3>
+                    <p>Build multi-step pipelines: agent A &rarr; agent B &rarr; agent C with template variables.</p>
                 </article>
                 <article class="feature">
-                    <h3>Invocation logs</h3>
-                    <p>Every task is logged with caller IP, latency, and status. Full audit trail.</p>
+                    <h3>Built-in billing</h3>
+                    <p>Price per task, org wallets, auto-charge, transaction ledger, 2% platform fee. <a href="/pricing">Pricing</a>.</p>
                 </article>
                 <article class="feature">
-                    <h3>Usage tracking</h3>
-                    <p>Monitor invocations per agent. Prepare for billing and monetization.</p>
+                    <h3>Organizations</h3>
+                    <p>Multi-tenant: create orgs with their own API keys, rate limits, and billing.</p>
+                </article>
+                <article class="feature">
+                    <h3>Reviews &amp; ratings</h3>
+                    <p>Community-driven quality signals. Rate and review agents in the <a href="/marketplace">marketplace</a>.</p>
+                </article>
+                <article class="feature">
+                    <h3>Search &amp; discovery</h3>
+                    <p>Full-text search, multi-tag filtering, sorting by rating/price/name, pagination.</p>
                 </article>
                 <article class="feature">
                     <h3>Health monitoring</h3>
-                    <p>Background health checks every 60s. Know when agents go down before your users do.</p>
+                    <p>Background checks every 60s. Status dashboard for all agents.</p>
+                </article>
+                <article class="feature">
+                    <h3>Metrics &amp; logs</h3>
+                    <p><a href="/dashboard">Live dashboard</a> with latency (avg/p99), errors, and per-agent audit trail.</p>
+                </article>
+                <article class="feature">
+                    <h3>Python &amp; TypeScript SDKs</h3>
+                    <p><code>pip install agentgatesh</code> or <code>npm install agentgatesh</code>. Sync + async.</p>
+                </article>
+                <article class="feature">
+                    <h3>Plugin system</h3>
+                    <p>Pre/post task hooks for logging, filtering, or custom logic. YAML config.</p>
+                </article>
+                <article class="feature">
+                    <h3>Rate limiting</h3>
+                    <p>Token bucket per IP + per-org custom limits. Redis-backed or in-memory fallback.</p>
+                </article>
+                <article class="feature">
+                    <h3>UCP commerce</h3>
+                    <p>Universal Commerce Protocol for standardized agent payments and checkout flows.</p>
                 </article>
                 <article class="feature">
                     <h3>Webhooks</h3>
-                    <p>Get notified when tasks complete. Fire-and-forget callbacks to any URL.</p>
-                </article>
-                <article class="feature">
-                    <h3>Live dashboard</h3>
-                    <p><a href="/dashboard">Real-time metrics dashboard</a> with latency charts and error tracking.</p>
-                </article>
-                <article class="feature">
-                    <h3>Discovery endpoint</h3>
-                    <p>Standard <code>/.well-known/agent.json</code> endpoint for automatic agent discovery.</p>
-                </article>
-                <article class="feature">
-                    <h3>Python SDK</h3>
-                    <p><code>pip install agentgatesh</code> &mdash; full client for registry, tasks, logs, and health.</p>
-                </article>
-                <article class="feature">
-                    <h3>Monetization</h3>
-                    <p>Set a price per task, manage org wallets, and earn from your agents with built-in billing. <a href="/pricing">See pricing</a>.</p>
+                    <p>Get notified when tasks complete. Exponential backoff retry.</p>
                 </article>
                 <article class="feature">
                     <h3>Open source</h3>
-                    <p>AGPL licensed. Run it yourself, contribute, or build on top of it.</p>
+                    <p>AGPL licensed. Self-host, contribute, or build on top of it.</p>
                 </article>
             </div>
         </div>
@@ -538,8 +549,8 @@
             <p>It takes less than 5 minutes. Seriously.</p>
             <div class="cta-group">
                 <a href="https://github.com/agentgatesh/agentgate" class="btn btn-primary">View on GitHub</a>
-                <a href="/pricing" class="btn btn-secondary">Pricing</a>
-                <a href="/dashboard" class="btn btn-secondary">Live Dashboard</a>
+                <a href="/marketplace" class="btn btn-secondary">Marketplace</a>
+                <a href="/guide" class="btn btn-secondary">Documentation</a>
             </div>
         </div>
     </section>
@@ -552,13 +563,13 @@
             &nbsp;&middot;&nbsp;
             <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
             &nbsp;&middot;&nbsp;
-            <a href="/dashboard">Dashboard</a>
+            <a href="/marketplace">Marketplace</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/guide">Docs</a>
             &nbsp;&middot;&nbsp;
             <a href="/pricing">Pricing</a>
             &nbsp;&middot;&nbsp;
-            <a href="/billing">Billing</a>
-            &nbsp;&middot;&nbsp;
-            <a href="/.well-known/agent.json">Agent Discovery</a>
+            <a href="/dashboard">Dashboard</a>
         </p>
     </div>
 </footer>

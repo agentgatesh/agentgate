@@ -973,10 +973,10 @@ def test_landing_page_has_dashboard_link():
 def test_landing_page_has_new_features():
     response = client.get("/")
     html = response.text
-    assert "Per-agent auth" in html
-    assert "Invocation logs" in html
-    assert "Usage tracking" in html
+    assert "One-command deploy" in html
+    assert "Built-in billing" in html
     assert "Health monitoring" in html
+    assert "Organizations" in html
 
 
 # ---------------------------------------------------------------------------
