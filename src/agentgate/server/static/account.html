@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <title>Account — AgentGate</title>
+    <meta name="description" content="Manage your AgentGate account, agents, and billing.">
+    <meta property="og:title" content="Account — AgentGate">
+    <meta property="og:description" content="Manage your AgentGate account, agents, and billing.">
+    <meta property="og:image" content="https://agentgate.sh/static/og_image.png">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --surface2: #1a1a1a;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+            --red: #ef4444;
+            --yellow: #eab308;
+            --purple: #a855f7;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        /* Not-logged-in state */
+        .login-prompt {
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; padding: 24px;
+        }
+        .login-prompt .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 12px; padding: 40px; max-width: 420px; width: 100%; text-align: center;
+        }
+        .login-prompt h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+        .login-prompt p { color: var(--text-muted); font-size: 15px; margin-bottom: 24px; }
+        .login-prompt .btn {
+            display: inline-block; padding: 12px 32px; background: var(--accent); color: #fff;
+            border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none;
+        }
+        .login-prompt .btn:hover { background: var(--accent-hover); color: #fff; }
+
+        /* Layout */
+        .app { display: none; height: 100vh; }
+        .sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
+            background: var(--surface); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; padding: 16px 0;
+        }
+        .sidebar .logo {
+            font-size: 18px; font-weight: 700; padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border); margin-bottom: 12px;
+        }
+        .sidebar .logo span { color: var(--accent); }
+        .sidebar .logo small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+            color: var(--text-muted); font-size: 14px; cursor: pointer; transition: all 0.15s;
+        }
+        .nav-item:hover { color: var(--text); background: var(--surface2); }
+        .nav-item.active { color: var(--accent); background: rgba(59,130,246,0.08); border-right: 2px solid var(--accent); }
+        .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
+        .sidebar-footer a { font-size: 13px; color: var(--text-muted); }
+
+        .main { margin-left: 220px; padding: 32px; min-height: 100vh; overflow-y: auto; width: calc(100% - 220px); }
+        .page { display: none; max-width: 100%; }
+        .page.active { display: block; }
+        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
+
+        /* KPI cards */
+        .kpi-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 16px; margin-bottom: 32px;
+        }
+        .kpi-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px;
+        }
+        .kpi-card .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .kpi-card .value { font-size: 28px; font-weight: 700; }
+        .kpi-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        /* Panel */
+        .panel {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px; margin-bottom: 24px;
+        }
+        .panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+
+        /* Tables */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table th {
+            text-align: left; padding: 10px 12px; color: var(--text-muted);
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border); font-weight: 600;
+        }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .data-table tr:last-child td { border-bottom: none; }
+        .data-table tr:hover td { background: var(--surface2); }
+
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+        }
+        .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+        .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge-blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+        .badge-purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+        .badge-yellow { background: rgba(234,179,8,0.15); color: var(--yellow); }
+
+        .no-data { color: var(--text-muted); font-style: italic; font-size: 13px; padding: 20px 0; }
+
+        /* Stat rows */
+        .stat-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 0; border-bottom: 1px solid var(--border);
+        }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label { font-size: 14px; color: var(--text-muted); }
+        .stat-value { font-size: 14px; font-weight: 600; }
+
+        /* Buttons */
+        .btn-primary {
+            padding: 10px 20px; background: var(--accent); color: #fff;
+            border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger {
+            padding: 8px 16px; background: rgba(239,68,68,0.15); color: var(--red);
+            border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; font-size: 13px;
+            cursor: pointer; font-weight: 600;
+        }
+        .btn-danger:hover { background: rgba(239,68,68,0.25); }
+
+        /* Form */
+        .form-field { margin-bottom: 16px; }
+        .form-field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+        .form-field input {
+            width: 100%; max-width: 400px; padding: 10px 14px; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+            font-size: 14px; outline: none;
+        }
+        .form-field input:focus { border-color: var(--accent); }
+        .form-msg { font-size: 13px; margin-top: 8px; }
+        .form-msg.success { color: var(--green); }
+        .form-msg.error { color: var(--red); }
+
+        /* API key display */
+        .key-display {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 13px; padding: 12px 16px; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 8px;
+            word-break: break-all; color: var(--text-muted);
+        }
+        .key-banner {
+            background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3);
+            border-radius: 8px; padding: 16px; margin-bottom: 20px; display: none;
+        }
+        .key-banner .title { font-weight: 600; color: var(--green); margin-bottom: 6px; }
+        .key-banner .key { font-family: monospace; font-size: 13px; word-break: break-all; color: var(--green); }
+        .key-banner .warn { font-size: 12px; color: var(--yellow); margin-top: 8px; }
+
+        /* Mobile */
+        .mobile-header {
+            display: none; padding: 14px 20px; border-bottom: 1px solid var(--border);
+            background: var(--surface); justify-content: space-between; align-items: center;
+        }
+        .mobile-header .logo { font-size: 18px; font-weight: 700; }
+        .mobile-header .logo span { color: var(--accent); }
+        .hamburger { background: none; border: none; color: var(--text); font-size: 24px; cursor: pointer; }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; z-index: 100; }
+            .sidebar.open { display: flex; width: 260px; }
+            .main { margin-left: 0; padding: 20px; width: 100%; }
+            .mobile-header { display: flex; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Not logged in -->
+<div class="login-prompt" id="loginPrompt">
+    <div class="card">
+        <h1>Account</h1>
+        <p>Sign in to manage your agents, billing, and profile.</p>
+        <a href="/login" class="btn">Sign In</a>
+        <p style="margin-top:16px;font-size:14px;color:var(--text-muted)">
+            Don't have an account? <a href="/signup">Sign up free</a>
+        </p>
+    </div>
+</div>
+
+<!-- Mobile header -->
+<div class="mobile-header" id="mobileHeader">
+    <div class="logo">Agent<span>Gate</span></div>
+    <button class="hamburger" onclick="toggleSidebar()">&#9776;</button>
+</div>
+
+<!-- App -->
+<div class="app" id="app">
+    <div class="sidebar" id="sidebar">
+        <div class="logo">
+            Agent<span>Gate</span>
+            <small id="sidebarOrgName">Account</small>
+        </div>
+        <div class="nav-item active" onclick="showPage('dashboard')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Dashboard
+        </div>
+        <div class="nav-item" onclick="showPage('agents')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            Agents
+        </div>
+        <div class="nav-item" onclick="showPage('billing')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Billing
+        </div>
+        <div class="nav-item" onclick="showPage('profile')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Profile
+        </div>
+        <div class="sidebar-footer">
+            <a href="/">Back to site</a>
+            &nbsp;&middot;&nbsp;
+            <a href="#" onclick="doLogout()">Logout</a>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Dashboard -->
+        <div class="page active" id="page-dashboard">
+            <div class="page-title">Dashboard</div>
+            <div class="kpi-grid" id="kpiGrid">
+                <div class="kpi-card"><div class="label">Loading...</div><div class="value">-</div></div>
+            </div>
+        </div>
+
+        <!-- Agents -->
+        <div class="page" id="page-agents">
+            <div class="page-title">Your Agents</div>
+            <div class="panel">
+                <table class="data-table">
+                    <thead><tr><th>Name</th><th>Version</th><th>Price</th><th>Deployed</th><th>Tags</th><th>Created</th></tr></thead>
+                    <tbody id="agentsBody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+                </table>
+            </div>
+            <p style="font-size:13px;color:var(--text-muted)">
+                Register new agents via the <a href="/guide#register-agent">API</a> or <a href="/guide#cli">CLI</a>.
+            </p>
+        </div>
+
+        <!-- Billing -->
+        <div class="page" id="page-billing">
+            <div class="page-title">Billing</div>
+            <div class="kpi-grid" id="billingKpi">
+                <div class="kpi-card"><div class="label">Loading...</div><div class="value">-</div></div>
+            </div>
+            <div class="panel">
+                <h3>Recent Transactions</h3>
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Agent</th><th>Direction</th><th>Amount</th><th>Fee</th><th>Net</th></tr></thead>
+                    <tbody id="txBody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Profile -->
+        <div class="page" id="page-profile">
+            <div class="page-title">Profile</div>
+
+            <div class="panel" id="profileInfo">
+                <h3>Account Info</h3>
+                <p class="no-data">Loading...</p>
+            </div>
+
+            <div class="panel">
+                <h3>API Key</h3>
+                <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+                    Your API key is used to authenticate CLI and SDK requests. It is stored hashed and cannot be retrieved.
+                </p>
+                <div class="key-display" id="keyMasked">ag-****...****</div>
+                <div class="key-banner" id="newKeyBanner">
+                    <div class="title">New API Key Generated</div>
+                    <div class="key" id="newKeyValue"></div>
+                    <div class="warn">Save this key now — it will not be shown again.</div>
+                </div>
+                <button class="btn-danger" style="margin-top:12px" onclick="resetApiKey()">Reset API Key</button>
+            </div>
+
+            <div class="panel">
+                <h3 id="pwdTitle">Change Password</h3>
+                <div id="currentPwdField" class="form-field">
+                    <label for="currentPwd">Current Password</label>
+                    <input type="password" id="currentPwd" autocomplete="current-password">
+                </div>
+                <div class="form-field">
+                    <label for="newPwd">New Password</label>
+                    <input type="password" id="newPwd" placeholder="Min. 8 characters" autocomplete="new-password">
+                </div>
+                <button class="btn-primary" onclick="changePassword()">Update Password</button>
+                <div class="form-msg" id="pwdMsg"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- Auth check ---
+async function checkAuth() {
+    try {
+        const r = await fetch("/auth/me");
+        if (!r.ok) throw new Error();
+        return await r.json();
+    } catch {
+        return null;
+    }
+}
+
+let currentUser = null;
+
+checkAuth().then(user => {
+    if (user) {
+        currentUser = user;
+        document.getElementById("loginPrompt").style.display = "none";
+        document.getElementById("app").style.display = "flex";
+        document.getElementById("sidebarOrgName").textContent = user.org_name;
+        loadDashboard();
+    }
+});
+
+// --- Navigation ---
+function showPage(page) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.getElementById("page-" + page).classList.add("active");
+    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+    const labels = { dashboard: "Dashboard", agents: "Agents", billing: "Billing", profile: "Profile" };
+    document.querySelectorAll(".nav-item").forEach(n => {
+        if (n.textContent.trim() === labels[page]) n.classList.add("active");
+    });
+    if (page === "dashboard") loadDashboard();
+    if (page === "agents") loadAgents();
+    if (page === "billing") loadBilling();
+    if (page === "profile") loadProfile();
+    // Close mobile sidebar
+    document.getElementById("sidebar").classList.remove("open");
+}
+
+function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("open");
+}
+
+// --- API ---
+async function apiFetch(url) {
+    const r = await fetch(url);
+    if (r.status === 401) {
+        window.location.href = "/login";
+        throw new Error("Not authenticated");
+    }
+    if (!r.ok) throw new Error("API error");
+    return r.json();
+}
+
+// --- Dashboard ---
+async function loadDashboard() {
+    try {
+        const d = await apiFetch("/account/api/dashboard");
+        document.getElementById("kpiGrid").innerHTML = `
+            ${kpi("Agents", d.agent_count, d.deployed_count + " deployed")}
+            ${kpi("Total Tasks", d.total_tasks, d.total_errors + " errors")}
+            ${kpi("Balance", "$" + d.balance, "")}
+            ${kpi("Tier", '<span class="badge ' + tierBadge(d.tier) + '">' + d.tier + '</span>', "")}
+            ${kpi("Total Spent", "$" + d.total_spent, "")}
+            ${kpi("Total Earned", "$" + d.total_earned, "")}
+        `;
+    } catch {}
+}
+
+function kpi(label, value, sub) {
+    return '<div class="kpi-card"><div class="label">' + label + '</div><div class="value">' + value + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>';
+}
+
+function tierBadge(t) { return t === "enterprise" ? "badge-purple" : t === "pro" ? "badge-yellow" : "badge-green"; }
+
+// --- Agents ---
+async function loadAgents() {
+    try {
+        const agents = await apiFetch("/account/api/agents");
+        const body = document.getElementById("agentsBody");
+        if (!agents.length) {
+            body.innerHTML = '<tr><td colspan="6" class="no-data">No agents yet. <a href="/guide#register-agent">Register your first agent</a>.</td></tr>';
+            return;
+        }
+        body.innerHTML = agents.map(a => `
+            <tr>
+                <td><strong>${esc(a.name)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${esc((a.description || "").substring(0, 60))}</span></td>
+                <td><span class="badge badge-blue">v${esc(a.version)}</span></td>
+                <td>${a.price_per_task > 0 ? "$" + a.price_per_task : "Free"}</td>
+                <td>${a.deployed ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
+                <td>${(a.tags || []).map(t => '<span class="badge badge-blue" style="margin-right:4px">' + esc(t) + '</span>').join("") || "—"}</td>
+                <td>${a.created_at ? a.created_at.substring(0, 10) : "—"}</td>
+            </tr>
+        `).join("");
+    } catch {}
+}
+
+// --- Billing ---
+async function loadBilling() {
+    try {
+        const [b, txs] = await Promise.all([
+            apiFetch("/account/api/billing"),
+            apiFetch("/account/api/transactions"),
+        ]);
+
+        document.getElementById("billingKpi").innerHTML = `
+            ${kpi("Balance", "$" + b.balance, "")}
+            ${kpi("Tier", '<span class="badge ' + tierBadge(b.tier) + '">' + b.tier + '</span>', "Fee: " + (b.tier_limits.fee_pct * 100) + "%")}
+            ${kpi("Agents", b.agent_count, "Max: " + b.tier_limits.max_agents)}
+            ${kpi("Total Spent", "$" + b.total_spent, b.transactions_as_payer + " transactions")}
+            ${kpi("Total Earned", "$" + b.total_earned, b.transactions_as_receiver + " transactions")}
+            ${kpi("Fees Paid", "$" + b.total_fees_paid, "")}
+        `;
+
+        const txBody = document.getElementById("txBody");
+        if (!txs.length) {
+            txBody.innerHTML = '<tr><td colspan="6" class="no-data">No transactions yet.</td></tr>';
+            return;
+        }
+        txBody.innerHTML = txs.map(t => `
+            <tr>
+                <td>${t.created_at ? t.created_at.substring(0, 19).replace("T", " ") : ""}</td>
+                <td>${esc(t.agent_name)}</td>
+                <td><span class="badge ${t.direction === "paid" ? "badge-red" : "badge-green"}">${t.direction}</span></td>
+                <td>$${t.amount}</td>
+                <td>$${t.fee}</td>
+                <td>$${t.net}</td>
+            </tr>
+        `).join("");
+    } catch {}
+}
+
+// --- Profile ---
+async function loadProfile() {
+    try {
+        const p = await apiFetch("/account/api/profile");
+        const el = document.getElementById("profileInfo");
+        el.innerHTML = `
+            <h3>Account Info</h3>
+            <div class="stat-row">
+                <span class="stat-label">Organization</span>
+                <span class="stat-value">${esc(p.org_name)}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Email</span>
+                <span class="stat-value">${esc(p.email || "—")}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Tier</span>
+                <span class="stat-value"><span class="badge ${tierBadge(p.tier)}">${p.tier}</span></span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Login Method</span>
+                <span class="stat-value">${p.oauth_provider ? esc(p.oauth_provider.charAt(0).toUpperCase() + p.oauth_provider.slice(1)) + " OAuth" : "Email / Password"}</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Rate Limit</span>
+                <span class="stat-value">${p.rate_limit} req/s (burst ${p.rate_burst})</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Member Since</span>
+                <span class="stat-value">${p.created_at ? p.created_at.substring(0, 10) : "—"}</span>
+            </div>
+        `;
+
+        // Adapt password section
+        if (!p.has_password) {
+            document.getElementById("pwdTitle").textContent = "Set Password";
+            document.getElementById("currentPwdField").style.display = "none";
+        } else {
+            document.getElementById("pwdTitle").textContent = "Change Password";
+            document.getElementById("currentPwdField").style.display = "block";
+        }
+    } catch {}
+}
+
+// --- Actions ---
+async function changePassword() {
+    const currentPwd = document.getElementById("currentPwd").value;
+    const newPwd = document.getElementById("newPwd").value;
+    const msgEl = document.getElementById("pwdMsg");
+    msgEl.textContent = "";
+    msgEl.className = "form-msg";
+
+    if (!newPwd || newPwd.length < 8) {
+        msgEl.textContent = "Password must be at least 8 characters.";
+        msgEl.className = "form-msg error";
+        return;
+    }
+
+    try {
+        const r = await fetch("/account/api/change-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ current_password: currentPwd, new_password: newPwd }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Failed");
+        msgEl.textContent = "Password updated successfully.";
+        msgEl.className = "form-msg success";
+        document.getElementById("currentPwd").value = "";
+        document.getElementById("newPwd").value = "";
+    } catch (e) {
+        msgEl.textContent = e.message;
+        msgEl.className = "form-msg error";
+    }
+}
+
+async function resetApiKey() {
+    if (!confirm("This will invalidate your current API key. You will need to update it in your CLI and code. Continue?")) return;
+    try {
+        const r = await fetch("/account/api/reset-key", { method: "POST" });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Failed");
+        document.getElementById("newKeyValue").textContent = data.api_key;
+        document.getElementById("newKeyBanner").style.display = "block";
+    } catch (e) {
+        alert("Failed to reset key: " + e.message);
+    }
+}
+
+async function doLogout() {
+    await fetch("/auth/logout", { method: "POST" });
+    window.location.href = "/";
+}
+
+function esc(s) { if (!s) return ""; const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+</script>
+</body>
+</html>

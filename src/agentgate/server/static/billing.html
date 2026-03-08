@@ -363,7 +363,7 @@
             <a href="/marketplace">Marketplace</a>
             <a href="/billing" class="active">Billing</a>
             <a href="https://github.com/agentgatesh/agentgate" target="_blank">GitHub</a>
-            <a href="/signup" style="color:var(--accent);font-weight:600;">Sign Up</a>
+            <a id="authLink" href="/signup" style="color:var(--accent);font-weight:600;">Sign Up</a>
         </div>
     </div>
 </nav>
@@ -624,5 +624,6 @@
 
     init();
 </script>
+<script>fetch("/auth/me").then(r=>{if(r.ok){const e=document.getElementById("authLink");if(e){e.href="/account";e.textContent="Account"}}}).catch(()=>{});</script>
 </body>
 </html>
