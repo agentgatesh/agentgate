@@ -1,15 +1,15 @@
 """Add email field to organizations
 
-Revision ID: h8i9j0k1l2m3
-Revises: g7h8i9j0k1l2
+Revision ID: j0k1l2m3n4o5
+Revises: i9j0k1l2m3n4
 Create Date: 2026-03-08
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "h8i9j0k1l2m3"
-down_revision = "g7h8i9j0k1l2"
+revision = "j0k1l2m3n4o5"
+down_revision = "i9j0k1l2m3n4"
 branch_labels = None
 depends_on = None
 
