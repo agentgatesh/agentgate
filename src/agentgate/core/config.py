@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     deploy_port_start: int = 9100
     admin_username: str = "admin"
     admin_password: str = "changeme"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    base_url: str = "https://agentgate.sh"
 
 
 settings = Settings()

@@ -12,13 +12,14 @@ from agentgate import __version__
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server.admin_routes import router as admin_router
 from agentgate.server.auth import bearer_scheme_optional as bearer_scheme
+from agentgate.server.auth_routes import router as auth_router
 from agentgate.server.chain_routes import router as chains_router
 from agentgate.server.deploy_routes import router as deploy_router
 from agentgate.server.healthcheck import get_all_health, health_check_loop
 from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
-from agentgate.server.admin_routes import router as admin_router
 from agentgate.server.org_routes import router as orgs_router
 from agentgate.server.routes import router as agents_router
 from agentgate.server.ucp_routes import router as ucp_router
@@ -68,6 +69,7 @@ app.include_router(ucp_router, prefix="/v1")
 app.include_router(deploy_router)
 app.include_router(deploy_router, prefix="/v1")
 app.include_router(admin_router)
+app.include_router(auth_router)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -124,6 +126,17 @@ async def signup_page():
 @app.get("/billing", response_class=HTMLResponse)
 async def billing_page():
     return (STATIC_DIR / "billing.html").read_text()
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    return (STATIC_DIR / "login.html").read_text()
+
+
+@app.get("/account", response_class=HTMLResponse)
+async def account_page():
+    # Placeholder — will be built in next session
+    return HTMLResponse(content="<h1>Account — Coming soon</h1>", status_code=200)
 
 
 @app.get("/pricing", response_class=HTMLResponse)

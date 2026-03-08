@@ -37,9 +37,16 @@ async def signup(data: SignupRequest):
             raise HTTPException(status_code=409, detail="Organization name already taken")
 
         api_key = secrets.token_urlsafe(32)
+
+        password_hash = None
+        if data.password:
+            from agentgate.server.auth_routes import hash_password
+            password_hash = hash_password(data.password)
+
         org = Organization(
             name=data.name,
             email=data.email,
+            password_hash=password_hash,
             api_key_hash=hash_api_key(api_key),
             tier="free",
         )

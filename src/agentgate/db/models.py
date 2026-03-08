@@ -48,6 +48,9 @@ class Organization(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    oauth_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     api_key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     secondary_api_key_hash: Mapped[str | None] = mapped_column(
         String(255), nullable=True, default=None,
