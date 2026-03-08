@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     deploy_dir: str = "/data/deploys"
     docker_network: str = "agentgate_default"
     deploy_port_start: int = 9100
+    admin_username: str = "admin"
+    admin_password: str = "changeme"
 
 
 settings = Settings()

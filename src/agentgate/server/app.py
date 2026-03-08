@@ -18,6 +18,7 @@ from agentgate.server.deploy_routes import router as deploy_router
 from agentgate.server.healthcheck import get_all_health, health_check_loop
 from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
+from agentgate.server.admin_routes import router as admin_router
 from agentgate.server.org_routes import router as orgs_router
 from agentgate.server.routes import router as agents_router
 from agentgate.server.ucp_routes import router as ucp_router
@@ -66,6 +67,7 @@ app.include_router(ucp_router)
 app.include_router(ucp_router, prefix="/v1")
 app.include_router(deploy_router)
 app.include_router(deploy_router, prefix="/v1")
+app.include_router(admin_router)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

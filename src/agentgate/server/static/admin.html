@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <title>AgentGate Admin</title>
+    <title>Admin — AgentGate</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg: #0a0a0a;
             --surface: #141414;
+            --surface2: #1a1a1a;
             --border: #222;
             --text: #e5e5e5;
             --text-muted: #888;
@@ -18,6 +19,7 @@
             --green: #22c55e;
             --red: #ef4444;
             --yellow: #eab308;
+            --purple: #a855f7;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -27,64 +29,110 @@
             -webkit-font-smoothing: antialiased;
         }
         a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
 
-        .topbar {
-            border-bottom: 1px solid var(--border);
-            padding: 14px 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .topbar .logo { font-size: 18px; font-weight: 700; }
-        .topbar .logo span { color: var(--accent); }
-        .topbar nav { display: flex; gap: 16px; font-size: 14px; }
-
-        .container { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
-
-        .auth-overlay {
+        /* Login */
+        .login-overlay {
             position: fixed; inset: 0;
-            background: rgba(0,0,0,0.85);
+            background: var(--bg);
             display: flex; align-items: center; justify-content: center;
-            z-index: 100;
+            z-index: 200;
         }
-        .auth-box {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 12px; padding: 32px; width: 100%; max-width: 400px; text-align: center;
+        .login-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
         }
-        .auth-box h2 { font-size: 20px; margin-bottom: 8px; }
-        .auth-box p { font-size: 14px; color: var(--text-muted); margin-bottom: 20px; }
-        .auth-box input {
+        .login-box h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .login-box .sub { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+        .login-box label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; color: var(--text-muted); }
+        .login-box input {
             width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
-            border-radius: 8px; color: var(--text); font-size: 14px; margin-bottom: 12px;
+            border-radius: 8px; color: var(--text); font-size: 14px; margin-bottom: 16px; outline: none;
         }
-        .auth-box input:focus { outline: none; border-color: var(--accent); }
-        .auth-box button, .btn {
-            padding: 10px 18px; background: var(--accent); color: #fff; border: none;
-            border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+        .login-box input:focus { border-color: var(--accent); }
+        .login-error { color: var(--red); font-size: 13px; margin-bottom: 12px; display: none; }
+        .btn-primary {
+            display: block; width: 100%; padding: 12px; background: var(--accent); color: #fff;
+            border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
         }
-        .auth-box button:hover, .btn:hover { background: var(--accent-hover); }
-        .auth-error { color: var(--red); font-size: 13px; margin-top: 8px; display: none; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        .section-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; margin-top: 32px; }
-        .section-title:first-child { margin-top: 0; }
+        /* Layout */
+        .app { display: none; height: 100vh; }
+        .sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; width: 220px;
+            background: var(--surface); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; padding: 16px 0;
+        }
+        .sidebar .logo {
+            font-size: 18px; font-weight: 700; padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border); margin-bottom: 12px;
+        }
+        .sidebar .logo span { color: var(--accent); }
+        .sidebar .logo small { display: block; font-size: 11px; color: var(--text-muted); font-weight: 400; margin-top: 2px; }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+            color: var(--text-muted); font-size: 14px; cursor: pointer; transition: all 0.15s;
+        }
+        .nav-item:hover { color: var(--text); background: var(--surface2); }
+        .nav-item.active { color: var(--accent); background: rgba(59,130,246,0.08); border-right: 2px solid var(--accent); }
+        .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
+        .sidebar-footer a { font-size: 13px; color: var(--text-muted); }
 
-        .agent-card {
+        .main { margin-left: 220px; padding: 32px; min-height: 100vh; overflow-y: auto; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
+
+        /* KPI cards */
+        .kpi-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px; margin-bottom: 32px;
+        }
+        .kpi-card {
             background: var(--surface); border: 1px solid var(--border);
-            border-radius: 10px; padding: 20px; margin-bottom: 16px;
+            border-radius: 10px; padding: 20px;
         }
-        .agent-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 12px; cursor: pointer;
-        }
-        .agent-header h3 { font-size: 16px; font-weight: 600; }
-        .agent-meta { font-size: 13px; color: var(--text-muted); display: flex; gap: 16px; }
-        .agent-details { display: none; border-top: 1px solid var(--border); padding-top: 16px; margin-top: 12px; }
-        .agent-details.open { display: block; }
+        .kpi-card .label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+        .kpi-card .value { font-size: 28px; font-weight: 700; }
+        .kpi-card .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
-        .stats-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 16px; }
-        .stat-mini { font-size: 13px; }
-        .stat-mini .label { color: var(--text-muted); }
-        .stat-mini .val { font-size: 20px; font-weight: 700; }
+        /* Chart */
+        .chart-container {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px; margin-bottom: 24px;
+        }
+        .chart-container h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+        .chart-bars { display: flex; align-items: flex-end; gap: 3px; height: 120px; }
+        .chart-bar {
+            flex: 1; background: var(--accent); border-radius: 2px 2px 0 0;
+            min-width: 4px; position: relative; transition: background 0.15s;
+        }
+        .chart-bar:hover { background: var(--accent-hover); }
+        .chart-bar .tooltip {
+            display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+            background: var(--surface2); border: 1px solid var(--border); padding: 4px 8px;
+            border-radius: 4px; font-size: 11px; white-space: nowrap; z-index: 10;
+        }
+        .chart-bar:hover .tooltip { display: block; }
+
+        /* Tables */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table th {
+            text-align: left; padding: 10px 12px; color: var(--text-muted);
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border); font-weight: 600;
+        }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .data-table tr:last-child td { border-bottom: none; }
+        .data-table tr:hover td { background: var(--surface2); }
+        .data-table .clickable { cursor: pointer; }
 
         .badge {
             display: inline-block; padding: 2px 8px; border-radius: 4px;
@@ -94,228 +142,399 @@
         .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
         .badge-yellow { background: rgba(234,179,8,0.15); color: var(--yellow); }
         .badge-blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+        .badge-purple { background: rgba(168,85,247,0.15); color: var(--purple); }
 
-        table {
-            width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px;
+        /* Panel / Card */
+        .panel {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px; margin-bottom: 24px;
         }
-        th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-        tr:last-child td { border-bottom: none; }
+        .panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
 
-        .no-data { color: var(--text-muted); font-style: italic; font-size: 13px; }
-        .hidden { display: none !important; }
+        /* Search / Filter bar */
+        .filter-bar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-bar input, .filter-bar select {
+            padding: 8px 14px; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+        }
+        .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+        .filter-bar select { cursor: pointer; }
 
-        .tab-bar { display: flex; gap: 8px; margin-bottom: 12px; }
-        .tab-btn {
-            padding: 6px 14px; background: var(--bg); border: 1px solid var(--border);
-            border-radius: 6px; color: var(--text-muted); font-size: 12px;
+        .no-data { color: var(--text-muted); font-style: italic; font-size: 13px; padding: 20px 0; }
+
+        /* Detail view */
+        .detail-back { font-size: 13px; margin-bottom: 16px; cursor: pointer; color: var(--text-muted); }
+        .detail-back:hover { color: var(--text); }
+        .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+        .detail-header h2 { font-size: 20px; font-weight: 700; }
+        .detail-meta { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+        .btn-danger {
+            padding: 8px 16px; background: rgba(239,68,68,0.15); color: var(--red);
+            border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; font-size: 13px;
             cursor: pointer; font-weight: 600;
         }
-        .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-danger:hover { background: rgba(239,68,68,0.25); }
 
-        @media (max-width: 600px) {
-            .agent-meta { flex-direction: column; gap: 4px; }
-            .stats-row { flex-direction: column; gap: 8px; }
-            .container { padding: 20px 16px; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 20px; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+            .detail-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
-<div class="topbar">
-    <div><a href="/"><span class="logo">Agent<span>Gate</span></span></a> &nbsp; Admin</div>
-    <nav>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/docs">API Docs</a>
-    </nav>
-</div>
-
-<div class="auth-overlay" id="auth-overlay">
-    <div class="auth-box">
-        <h2>Admin Access</h2>
-        <p>Enter your API key to manage agents.</p>
-        <input type="password" id="api-key-input" placeholder="API key" autofocus>
-        <button onclick="tryAuth()" style="width:100%">Access Admin</button>
-        <div class="auth-error" id="auth-error">Invalid API key. Try again.</div>
+<!-- Login -->
+<div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+        <h1>Admin Panel</h1>
+        <p class="sub">Sign in to manage AgentGate.</p>
+        <div class="login-error" id="loginError">Invalid username or password.</div>
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="admin" autocomplete="username" autofocus>
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+        <button class="btn-primary" id="loginBtn" onclick="doLogin()">Sign In</button>
     </div>
 </div>
 
-<div class="container hidden" id="admin">
-    <div class="section-title">Registered Agents</div>
-    <div id="agents-list">
-        <p class="no-data">Loading...</p>
+<!-- App -->
+<div class="app" id="app">
+    <div class="sidebar">
+        <div class="logo">Agent<span>Gate</span><small>Admin Panel</small></div>
+        <div class="nav-item active" onclick="showPage('dashboard')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            Dashboard
+        </div>
+        <div class="nav-item" onclick="showPage('users')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Users
+        </div>
+        <div class="nav-item" onclick="showPage('agents')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            Agents
+        </div>
+        <div class="nav-item" onclick="showPage('transactions')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Transactions
+        </div>
+        <div class="sidebar-footer">
+            <a href="/" target="_blank">Back to site</a>
+            &nbsp;&middot;&nbsp;
+            <a href="#" onclick="logout()">Logout</a>
+        </div>
+    </div>
+
+    <div class="main">
+        <!-- Dashboard -->
+        <div class="page active" id="page-dashboard">
+            <div class="page-title">Dashboard</div>
+            <div class="kpi-grid" id="kpiGrid"></div>
+            <div class="chart-container">
+                <h3>Tasks (last 30 days)</h3>
+                <div class="chart-bars" id="tasksChart"></div>
+            </div>
+            <div class="chart-container">
+                <h3>Signups (last 30 days)</h3>
+                <div class="chart-bars" id="signupsChart"></div>
+            </div>
+        </div>
+
+        <!-- Users -->
+        <div class="page" id="page-users">
+            <div class="page-title">Users</div>
+            <div class="filter-bar">
+                <input type="text" id="userSearch" placeholder="Search by name..." oninput="loadUsers()">
+                <select id="userTier" onchange="loadUsers()">
+                    <option value="">All tiers</option>
+                    <option value="free">Free</option>
+                    <option value="pro">Pro</option>
+                    <option value="enterprise">Enterprise</option>
+                </select>
+            </div>
+            <div class="panel">
+                <table class="data-table">
+                    <thead><tr><th>Name</th><th>Email</th><th>Tier</th><th>Balance</th><th>Agents</th><th>Created</th></tr></thead>
+                    <tbody id="usersBody"><tr><td colspan="6" class="no-data">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- User Detail -->
+        <div class="page" id="page-user-detail">
+            <div class="detail-back" onclick="showPage('users')">&larr; Back to Users</div>
+            <div id="userDetailContent"></div>
+        </div>
+
+        <!-- Agents -->
+        <div class="page" id="page-agents">
+            <div class="page-title">Agents</div>
+            <div class="panel">
+                <table class="data-table">
+                    <thead><tr><th>Name</th><th>Owner</th><th>Version</th><th>Price</th><th>Deployed</th><th>Created</th><th></th></tr></thead>
+                    <tbody id="agentsBody"><tr><td colspan="7" class="no-data">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Transactions -->
+        <div class="page" id="page-transactions">
+            <div class="page-title">Transactions</div>
+            <div class="panel">
+                <table class="data-table">
+                    <thead><tr><th>Date</th><th>Agent</th><th>Payer</th><th>Receiver</th><th>Amount</th><th>Fee</th><th>Net</th></tr></thead>
+                    <tbody id="txBody"><tr><td colspan="7" class="no-data">Loading...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
-let apiKey = localStorage.getItem("ag_dashboard_key") || "";
+let token = localStorage.getItem("ag_admin_token") || "";
 
-function tryAuth() {
-    const input = document.getElementById("api-key-input");
-    apiKey = input.value.trim();
-    if (!apiKey) return;
-    fetchAgents().then(ok => {
-        if (ok) {
-            localStorage.setItem("ag_dashboard_key", apiKey);
-            document.getElementById("auth-overlay").classList.add("hidden");
-            document.getElementById("admin").classList.remove("hidden");
-        } else {
-            document.getElementById("auth-error").style.display = "block";
-            input.value = ""; input.focus();
-        }
-    });
-}
+// --- Auth ---
+async function doLogin() {
+    const u = document.getElementById("username").value.trim();
+    const p = document.getElementById("password").value.trim();
+    const err = document.getElementById("loginError");
+    err.style.display = "none";
+    if (!u || !p) return;
 
-document.getElementById("api-key-input").addEventListener("keydown", e => {
-    if (e.key === "Enter") tryAuth();
-});
-
-if (apiKey) {
-    fetchAgents().then(ok => {
-        if (ok) {
-            document.getElementById("auth-overlay").classList.add("hidden");
-            document.getElementById("admin").classList.remove("hidden");
-        } else { localStorage.removeItem("ag_dashboard_key"); apiKey = ""; }
-    });
-}
-
-async function fetchAgents() {
+    const btn = document.getElementById("loginBtn");
+    btn.disabled = true; btn.textContent = "Signing in...";
     try {
-        const resp = await fetch("/agents/");
-        if (!resp.ok) return false;
-        const agents = await resp.json();
-        renderAgents(agents);
-        return true;
-    } catch { return false; }
-}
-
-function renderAgents(agents) {
-    const el = document.getElementById("agents-list");
-    if (!agents.length) { el.innerHTML = '<p class="no-data">No agents registered.</p>'; return; }
-    el.innerHTML = agents.map(a => `
-        <div class="agent-card" id="card-${a.id}">
-            <div class="agent-header" onclick="toggleAgent('${a.id}')">
-                <div>
-                    <h3>${esc(a.name)} <span class="badge badge-blue">v${esc(a.version)}</span></h3>
-                    <div style="font-size:12px;color:var(--text-muted);margin-top:4px">${esc(a.description || "No description")}</div>
-                </div>
-                <div class="agent-meta">
-                    <span>${a.id.substring(0,8)}...</span>
-                    <span>${a.created_at ? a.created_at.substring(0,10) : ""}</span>
-                </div>
-            </div>
-            <div class="agent-details" id="details-${a.id}">
-                <div class="stats-row" id="usage-${a.id}">
-                    <p class="no-data">Loading usage...</p>
-                </div>
-                <div class="tab-bar">
-                    <div class="tab-btn active" onclick="showTab('${a.id}','logs')">Logs</div>
-                    <div class="tab-btn" onclick="showTab('${a.id}','billing')">Billing</div>
-                    <div class="tab-btn" onclick="showTab('${a.id}','health')">Health</div>
-                </div>
-                <div id="tab-logs-${a.id}"><p class="no-data">Loading logs...</p></div>
-                <div id="tab-billing-${a.id}" class="hidden"><p class="no-data">Loading billing...</p></div>
-                <div id="tab-health-${a.id}" class="hidden"><p class="no-data">Loading health...</p></div>
-            </div>
-        </div>
-    `).join("");
-}
-
-const loadedAgents = new Set();
-
-async function toggleAgent(id) {
-    const el = document.getElementById("details-" + id);
-    if (el.classList.contains("open")) { el.classList.remove("open"); return; }
-    el.classList.add("open");
-    if (loadedAgents.has(id)) return;
-    loadedAgents.add(id);
-    loadUsage(id);
-    loadLogs(id);
-    loadBilling(id);
-    loadHealth(id);
-}
-
-function showTab(id, tab) {
-    ["logs","billing","health"].forEach(t => {
-        document.getElementById("tab-" + t + "-" + id).classList.toggle("hidden", t !== tab);
-    });
-    const card = document.getElementById("card-" + id);
-    card.querySelectorAll(".tab-btn").forEach(btn => {
-        btn.classList.toggle("active", btn.textContent.toLowerCase() === tab);
-    });
-}
-
-async function loadUsage(id) {
-    const el = document.getElementById("usage-" + id);
-    try {
-        const r = await fetch(`/agents/${id}/usage`, { headers: { Authorization: "Bearer " + apiKey } });
-        if (!r.ok) { el.innerHTML = '<p class="no-data">Could not load usage.</p>'; return; }
+        const r = await fetch("/admin/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: u, password: p }),
+        });
+        if (!r.ok) throw new Error();
         const d = await r.json();
-        el.innerHTML = `
-            <div class="stat-mini"><div class="label">Invocations</div><div class="val">${d.total_invocations}</div></div>
-            <div class="stat-mini"><div class="label">Errors</div><div class="val" style="color:${d.total_errors > 0 ? 'var(--red)' : 'inherit'}">${d.total_errors}</div></div>
-            <div class="stat-mini"><div class="label">Avg Latency</div><div class="val">${d.avg_latency_ms}ms</div></div>
-            <div class="stat-mini"><div class="label">Last Call</div><div class="val" style="font-size:14px">${d.last_invocation ? d.last_invocation.substring(0,19).replace("T"," ") : "never"}</div></div>
+        token = d.token;
+        localStorage.setItem("ag_admin_token", token);
+        enterApp();
+    } catch {
+        err.style.display = "block";
+        btn.disabled = false; btn.textContent = "Sign In";
+    }
+}
+
+function logout() {
+    localStorage.removeItem("ag_admin_token");
+    token = "";
+    location.reload();
+}
+
+document.getElementById("password").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+document.getElementById("username").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("password").focus(); });
+
+function authHeaders() { return { Authorization: "Bearer " + token }; }
+
+async function apiFetch(url) {
+    const r = await fetch(url, { headers: authHeaders() });
+    if (r.status === 401) { logout(); throw new Error("Unauthorized"); }
+    if (!r.ok) throw new Error("API error");
+    return r.json();
+}
+
+// --- Init ---
+async function enterApp() {
+    document.getElementById("loginOverlay").style.display = "none";
+    document.getElementById("app").style.display = "flex";
+    loadDashboard();
+}
+
+if (token) {
+    // Verify token
+    fetch("/admin/api/dashboard", { headers: authHeaders() }).then(r => {
+        if (r.ok) enterApp();
+        else { localStorage.removeItem("ag_admin_token"); token = ""; }
+    }).catch(() => {});
+}
+
+// --- Navigation ---
+function showPage(page) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.getElementById("page-" + page).classList.add("active");
+    document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+    const labels = { dashboard: "Dashboard", users: "Users", agents: "Agents", transactions: "Transactions" };
+    document.querySelectorAll(".nav-item").forEach(n => {
+        if (n.textContent.trim() === labels[page]) n.classList.add("active");
+    });
+    if (page === "dashboard") loadDashboard();
+    if (page === "users") loadUsers();
+    if (page === "agents") loadAgents();
+    if (page === "transactions") loadTransactions();
+}
+
+// --- Dashboard ---
+async function loadDashboard() {
+    try {
+        const d = await apiFetch("/admin/api/dashboard");
+        document.getElementById("kpiGrid").innerHTML = `
+            ${kpi("Total Users", d.total_users, "today: +" + d.signups_today)}
+            ${kpi("Total Agents", d.total_agents, d.deployed_agents + " deployed")}
+            ${kpi("Total Tasks", d.total_tasks, "today: " + d.tasks_today)}
+            ${kpi("Transactions", d.total_transactions, "")}
+            ${kpi("Revenue (fees)", "$" + d.total_revenue, "today: $" + d.revenue_today)}
+            ${kpi("Tier Breakdown", Object.entries(d.tier_breakdown || {}).map(([k,v]) => k + ": " + v).join(", ") || "—", "")}
         `;
-    } catch { el.innerHTML = '<p class="no-data">Error loading usage.</p>'; }
+        renderChart("tasksChart", d.tasks_trend || []);
+        renderChart("signupsChart", d.signup_trend || []);
+    } catch {}
 }
 
-async function loadLogs(id) {
-    const el = document.getElementById("tab-logs-" + id);
-    try {
-        const r = await fetch(`/agents/${id}/logs?limit=20`, { headers: { Authorization: "Bearer " + apiKey } });
-        if (!r.ok) { el.innerHTML = '<p class="no-data">Could not load logs.</p>'; return; }
-        const logs = await r.json();
-        if (!logs.length) { el.innerHTML = '<p class="no-data">No logs yet.</p>'; return; }
-        el.innerHTML = `<table><thead><tr><th>Time</th><th>Status</th><th>Latency</th><th>IP</th><th>Task ID</th></tr></thead><tbody>
-            ${logs.map(l => `<tr>
-                <td>${l.created_at.substring(0,19).replace("T"," ")}</td>
-                <td><span class="badge ${l.status==="success"?"badge-green":"badge-red"}">${l.status}</span></td>
-                <td>${l.latency_ms}ms</td>
-                <td>${esc(l.caller_ip)}</td>
-                <td>${esc(l.task_id||"-")}</td>
-            </tr>`).join("")}
-        </tbody></table>`;
-    } catch { el.innerHTML = '<p class="no-data">Error loading logs.</p>'; }
+function kpi(label, value, sub) {
+    return `<div class="kpi-card"><div class="label">${label}</div><div class="value">${value}</div>${sub ? '<div class="sub">' + sub + '</div>' : ''}</div>`;
 }
 
-async function loadBilling(id) {
-    const el = document.getElementById("tab-billing-" + id);
-    try {
-        const r = await fetch(`/agents/${id}/usage/breakdown?period=day&days=30`, { headers: { Authorization: "Bearer " + apiKey } });
-        if (!r.ok) { el.innerHTML = '<p class="no-data">Could not load billing.</p>'; return; }
-        const d = await r.json();
-        const rows = d.breakdown || [];
-        if (!rows.length) { el.innerHTML = '<p class="no-data">No billing data yet.</p>'; return; }
-        el.innerHTML = `<table><thead><tr><th>Date</th><th>Invocations</th><th>Errors</th><th>Avg Latency</th></tr></thead><tbody>
-            ${rows.map(r => `<tr>
-                <td>${r.period.substring(0,10)}</td>
-                <td>${r.invocations}</td>
-                <td>${r.errors}</td>
-                <td>${r.avg_latency_ms}ms</td>
-            </tr>`).join("")}
-        </tbody></table>`;
-    } catch { el.innerHTML = '<p class="no-data">Error loading billing.</p>'; }
+function renderChart(elId, data) {
+    const el = document.getElementById(elId);
+    if (!data.length) { el.innerHTML = '<span class="no-data">No data yet</span>'; return; }
+    const max = Math.max(...data.map(d => d.count), 1);
+    el.innerHTML = data.map(d => {
+        const h = Math.max((d.count / max) * 100, 2);
+        return `<div class="chart-bar" style="height:${h}%"><div class="tooltip">${d.day}: ${d.count}</div></div>`;
+    }).join("");
 }
 
-async function loadHealth(id) {
-    const el = document.getElementById("tab-health-" + id);
+// --- Users ---
+async function loadUsers() {
+    const q = document.getElementById("userSearch").value.trim();
+    const tier = document.getElementById("userTier").value;
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (tier) params.set("tier", tier);
     try {
-        const r = await fetch(`/agents/${id}/health`);
-        if (!r.ok) { el.innerHTML = '<p class="no-data">Could not load health.</p>'; return; }
-        const d = await r.json();
-        const badge = d.status === "healthy" ? "badge-green" : d.status === "unhealthy" ? "badge-red" : "badge-yellow";
+        const users = await apiFetch("/admin/api/users?" + params.toString());
+        const body = document.getElementById("usersBody");
+        if (!users.length) { body.innerHTML = '<tr><td colspan="6" class="no-data">No users found.</td></tr>'; return; }
+        body.innerHTML = users.map(u => `
+            <tr class="clickable" onclick="showUserDetail('${u.id}')">
+                <td><strong>${esc(u.name)}</strong></td>
+                <td>${esc(u.email || "—")}</td>
+                <td><span class="badge ${tierBadge(u.tier)}">${u.tier}</span></td>
+                <td>$${u.balance}</td>
+                <td>${u.agent_count}</td>
+                <td>${u.created_at ? u.created_at.substring(0, 10) : "—"}</td>
+            </tr>
+        `).join("");
+    } catch {}
+}
+
+function tierBadge(t) { return t === "enterprise" ? "badge-purple" : t === "pro" ? "badge-blue" : "badge-green"; }
+
+async function showUserDetail(id) {
+    showPage("user-detail");
+    const el = document.getElementById("userDetailContent");
+    el.innerHTML = '<p class="no-data">Loading...</p>';
+    try {
+        const u = await apiFetch("/admin/api/users/" + id);
         el.innerHTML = `
-            <div style="display:flex;gap:20px;align-items:center;margin-top:8px">
-                <span class="badge ${badge}">${d.status}</span>
-                ${d.latency_ms ? `<span style="font-size:13px;color:var(--text-muted)">Latency: ${d.latency_ms}ms</span>` : ""}
-                ${d.last_check ? `<span style="font-size:13px;color:var(--text-muted)">Last check: ${d.last_check.substring(0,19).replace("T"," ")}</span>` : ""}
-                ${d.error ? `<span style="font-size:13px;color:var(--red)">Error: ${esc(d.error)}</span>` : ""}
-            </div>`;
-    } catch { el.innerHTML = '<p class="no-data">Error loading health.</p>'; }
+            <div class="detail-header">
+                <div>
+                    <h2>${esc(u.name)}</h2>
+                    <div class="detail-meta">
+                        <span>${esc(u.email || "No email")}</span>
+                        <span>Since ${u.created_at ? u.created_at.substring(0, 10) : "—"}</span>
+                    </div>
+                </div>
+                <button class="btn-danger" onclick="deleteUser('${u.id}')">Delete User</button>
+            </div>
+            <div class="detail-grid">
+                ${kpi("Tier", '<span class="badge ' + tierBadge(u.tier) + '">' + u.tier + '</span>', "")}
+                ${kpi("Balance", "$" + u.balance, "")}
+                ${kpi("Total Spent", "$" + u.total_spent, "")}
+                ${kpi("Total Earned", "$" + u.total_earned, "")}
+            </div>
+            <div class="panel">
+                <h3>Agents (${u.agents.length})</h3>
+                ${u.agents.length ? `<table class="data-table"><thead><tr><th>Name</th><th>Version</th><th>Price</th><th>Deployed</th><th>Created</th></tr></thead><tbody>
+                    ${u.agents.map(a => `<tr>
+                        <td><strong>${esc(a.name)}</strong></td>
+                        <td>${a.version}</td>
+                        <td>${a.price_per_task > 0 ? "$" + a.price_per_task : "Free"}</td>
+                        <td>${a.deployed ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
+                        <td>${a.created_at ? a.created_at.substring(0, 10) : ""}</td>
+                    </tr>`).join("")}
+                </tbody></table>` : '<p class="no-data">No agents.</p>'}
+            </div>
+            <div class="panel">
+                <h3>Recent Transactions (${u.transactions.length})</h3>
+                ${u.transactions.length ? `<table class="data-table"><thead><tr><th>Date</th><th>Agent</th><th>Direction</th><th>Amount</th><th>Fee</th></tr></thead><tbody>
+                    ${u.transactions.map(t => `<tr>
+                        <td>${t.created_at ? t.created_at.substring(0, 19).replace("T", " ") : ""}</td>
+                        <td>${esc(t.agent_name)}</td>
+                        <td><span class="badge ${t.direction === "paid" ? "badge-red" : "badge-green"}">${t.direction}</span></td>
+                        <td>$${t.amount}</td>
+                        <td>$${t.fee}</td>
+                    </tr>`).join("")}
+                </tbody></table>` : '<p class="no-data">No transactions.</p>'}
+            </div>
+        `;
+    } catch { el.innerHTML = '<p class="no-data">Error loading user details.</p>'; }
 }
 
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+async function deleteUser(id) {
+    if (!confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
+    try {
+        await fetch("/admin/api/users/" + id, { method: "DELETE", headers: authHeaders() });
+        showPage("users");
+    } catch {}
+}
+
+// --- Agents ---
+async function loadAgents() {
+    try {
+        const agents = await apiFetch("/admin/api/agents");
+        const body = document.getElementById("agentsBody");
+        if (!agents.length) { body.innerHTML = '<tr><td colspan="7" class="no-data">No agents.</td></tr>'; return; }
+        body.innerHTML = agents.map(a => `
+            <tr>
+                <td><strong>${esc(a.name)}</strong><br><span style="font-size:11px;color:var(--text-muted)">${esc(a.description ? a.description.substring(0, 60) : "")}</span></td>
+                <td>${esc(a.org_name || "—")}</td>
+                <td><span class="badge badge-blue">v${esc(a.version)}</span></td>
+                <td>${a.price_per_task > 0 ? "$" + a.price_per_task : "Free"}</td>
+                <td>${a.deployed ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'}</td>
+                <td>${a.created_at ? a.created_at.substring(0, 10) : "—"}</td>
+                <td><button class="btn-danger" style="padding:4px 10px;font-size:11px" onclick="deleteAgent('${a.id}')">Delete</button></td>
+            </tr>
+        `).join("");
+    } catch {}
+}
+
+async function deleteAgent(id) {
+    if (!confirm("Delete this agent?")) return;
+    try {
+        await fetch("/admin/api/agents/" + id, { method: "DELETE", headers: authHeaders() });
+        loadAgents();
+    } catch {}
+}
+
+// --- Transactions ---
+async function loadTransactions() {
+    try {
+        const d = await apiFetch("/admin/api/transactions?limit=100");
+        const body = document.getElementById("txBody");
+        if (!d.transactions.length) { body.innerHTML = '<tr><td colspan="7" class="no-data">No transactions.</td></tr>'; return; }
+        body.innerHTML = d.transactions.map(t => `
+            <tr>
+                <td>${t.created_at ? t.created_at.substring(0, 19).replace("T", " ") : ""}</td>
+                <td>${esc(t.agent_name)}</td>
+                <td>${esc(t.payer)}</td>
+                <td>${esc(t.receiver)}</td>
+                <td>$${t.amount}</td>
+                <td>$${t.fee}</td>
+                <td>$${t.net}</td>
+            </tr>
+        `).join("");
+    } catch {}
+}
+
+function esc(s) { if (!s) return ""; const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 </script>
 </body>
 </html>

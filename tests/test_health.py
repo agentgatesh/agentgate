@@ -4253,3 +4253,255 @@ def test_landing_page_has_signup_link():
     assert response.status_code == 200
     assert "/signup" in response.text
     assert "Sign Up" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Admin Panel
+# ---------------------------------------------------------------------------
+
+
+def test_admin_page_serves_html():
+    response = client.get("/admin")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Admin Panel" in response.text
+    assert "Sign In" in response.text
+
+
+def test_admin_login_success():
+    response = client.post(
+        "/admin/api/login",
+        json={"username": "admin", "password": "changeme"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "token" in data
+    assert "|" in data["token"]
+
+
+def test_admin_login_wrong_password():
+    response = client.post(
+        "/admin/api/login",
+        json={"username": "admin", "password": "wrongpassword"},
+    )
+    assert response.status_code == 401
+
+
+def test_admin_login_wrong_username():
+    response = client.post(
+        "/admin/api/login",
+        json={"username": "nobody", "password": "changeme"},
+    )
+    assert response.status_code == 401
+
+
+def _get_admin_token():
+    r = client.post(
+        "/admin/api/login",
+        json={"username": "admin", "password": "changeme"},
+    )
+    return r.json()["token"]
+
+
+def test_admin_dashboard_no_auth():
+    response = client.get("/admin/api/dashboard")
+    assert response.status_code == 401
+
+
+def test_admin_dashboard_with_auth():
+    token = _get_admin_token()
+    mock_session = AsyncMock()
+
+    # Mock all the scalar queries
+    mock_scalar = MagicMock()
+    mock_scalar.scalar.return_value = 0
+    mock_session.execute.return_value = mock_scalar
+
+    # Need to mock multiple execute calls with different returns
+    call_count = [0]
+    results = []
+    # 6 scalar counts + 3 grouped queries
+    for _ in range(6):
+        m = MagicMock()
+        m.scalar.return_value = 0
+        results.append(m)
+    for _ in range(3):
+        m = MagicMock()
+        m.all.return_value = []
+        results.append(m)
+
+    async def mock_execute(*args, **kwargs):
+        idx = min(call_count[0], len(results) - 1)
+        call_count[0] += 1
+        r = results[idx]
+        r.scalar.return_value = 0
+        return r
+
+    mock_session.execute = mock_execute
+
+    with patch("agentgate.server.admin_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.get(
+            "/admin/api/dashboard",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_users" in data
+    assert "total_agents" in data
+    assert "total_tasks" in data
+    assert "signup_trend" in data
+
+
+def test_admin_users_no_auth():
+    response = client.get("/admin/api/users")
+    assert response.status_code == 401
+
+
+def test_admin_users_with_auth():
+    token = _get_admin_token()
+    mock_session = AsyncMock()
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    with patch("agentgate.server.admin_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.get(
+            "/admin/api/users",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_admin_agents_with_auth():
+    token = _get_admin_token()
+    mock_session = AsyncMock()
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_session.execute.return_value = mock_result
+
+    with patch("agentgate.server.admin_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.get(
+            "/admin/api/agents",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_admin_transactions_with_auth():
+    token = _get_admin_token()
+    mock_session = AsyncMock()
+
+    mock_scalar = MagicMock()
+    mock_scalar.scalar.return_value = 0
+    mock_scalars = MagicMock()
+    mock_scalars.scalars.return_value.all.return_value = []
+
+    call_count = [0]
+
+    async def mock_execute(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return mock_scalar
+        return mock_scalars
+
+    mock_session.execute = mock_execute
+
+    with patch("agentgate.server.admin_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.get(
+            "/admin/api/transactions",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "total" in data
+    assert "transactions" in data
+
+
+def test_admin_token_expired():
+    # Manually create an expired token
+    import time
+
+    from agentgate.server.admin_routes import _make_token
+
+    old_time = time.time
+    time.time = lambda: old_time() - 100000  # token created far in the past
+    token = _make_token("admin")
+    time.time = old_time
+
+    response = client.get(
+        "/admin/api/dashboard",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+
+
+def test_admin_token_tampered():
+    token = _get_admin_token()
+    # Tamper with the signature
+    parts = token.rsplit("|", 1)
+    tampered = parts[0] + "|" + "0" * 64
+
+    response = client.get(
+        "/admin/api/dashboard",
+        headers={"Authorization": f"Bearer {tampered}"},
+    )
+    assert response.status_code == 401
+
+
+def test_admin_config_has_credentials():
+    from agentgate.core.config import Settings
+
+    s = Settings()
+    assert hasattr(s, "admin_username")
+    assert hasattr(s, "admin_password")
+    assert s.admin_username == "admin"
+    assert s.admin_password == "changeme"
+
+
+def test_admin_delete_user_no_auth():
+    response = client.delete("/admin/api/users/some-id")
+    assert response.status_code == 401
+
+
+def test_admin_delete_agent_no_auth():
+    response = client.delete("/admin/api/agents/some-id")
+    assert response.status_code == 401
+
+
+def test_admin_user_detail_not_found():
+    token = _get_admin_token()
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+
+    with patch("agentgate.server.admin_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.get(
+            "/admin/api/users/00000000-0000-0000-0000-000000000000",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 404
