@@ -40,6 +40,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-changeme}
       API_KEY: ${API_KEY}
       REDIS_URL: redis://redis:6379/0
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
