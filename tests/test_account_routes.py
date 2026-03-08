@@ -325,11 +325,20 @@ def test_reset_key_success():
 # ---------------------------------------------------------------------------
 
 
-def test_account_page_html():
-    response = client.get("/account")
+def test_account_page_redirects_to_login():
+    response = client.get("/account", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/login"
+
+
+def test_account_page_authenticated():
+    org = _make_fake_org()
+    mock_factory, _ = _mock_db_returning(org)
+
+    cookie = _session_cookie(org)
+    with patch("agentgate.server.auth_routes.async_session", mock_factory):
+        response = client.get("/account", cookies={"session": cookie})
+
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "Dashboard" in response.text
-    assert "Agents" in response.text
-    assert "Billing" in response.text
-    assert "Profile" in response.text

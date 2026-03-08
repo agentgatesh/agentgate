@@ -35,23 +35,6 @@
         a { color: var(--accent); text-decoration: none; }
         a:hover { color: var(--accent-hover); }
 
-        /* Not-logged-in state */
-        .login-prompt {
-            display: flex; align-items: center; justify-content: center;
-            min-height: 100vh; padding: 24px;
-        }
-        .login-prompt .card {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 12px; padding: 40px; max-width: 420px; width: 100%; text-align: center;
-        }
-        .login-prompt h1 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-        .login-prompt p { color: var(--text-muted); font-size: 15px; margin-bottom: 24px; }
-        .login-prompt .btn {
-            display: inline-block; padding: 12px 32px; background: var(--accent); color: #fff;
-            border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none;
-        }
-        .login-prompt .btn:hover { background: var(--accent-hover); color: #fff; }
-
         /* Layout */
         .app { display: none; height: 100vh; }
         .sidebar {
@@ -194,18 +177,6 @@
 </head>
 <body>
 
-<!-- Not logged in -->
-<div class="login-prompt" id="loginPrompt">
-    <div class="card">
-        <h1>Account</h1>
-        <p>Sign in to manage your agents, billing, and profile.</p>
-        <a href="/login" class="btn">Sign In</a>
-        <p style="margin-top:16px;font-size:14px;color:var(--text-muted)">
-            Don't have an account? <a href="/signup">Sign up free</a>
-        </p>
-    </div>
-</div>
-
 <!-- Mobile header -->
 <div class="mobile-header" id="mobileHeader">
     <div class="logo">Agent<span>Gate</span></div>
@@ -337,10 +308,11 @@ let currentUser = null;
 checkAuth().then(user => {
     if (user) {
         currentUser = user;
-        document.getElementById("loginPrompt").style.display = "none";
         document.getElementById("app").style.display = "flex";
         document.getElementById("sidebarOrgName").textContent = user.org_name;
         loadDashboard();
+    } else {
+        window.location.href = "/login";
     }
 });
 

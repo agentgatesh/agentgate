@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -136,7 +136,12 @@ async def login_page():
 
 
 @app.get("/account", response_class=HTMLResponse)
-async def account_page():
+async def account_page(request: Request):
+    from agentgate.server.auth_routes import get_current_user
+
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=302)
     return (STATIC_DIR / "account.html").read_text()
 
 
