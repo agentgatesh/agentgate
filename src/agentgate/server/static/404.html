@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <title>404 — AgentGate</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+        }
+        .nav-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo { font-size: 20px; font-weight: 700; color: var(--text); }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+
+        .content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 48px 24px;
+        }
+        .error-code {
+            font-size: 120px;
+            font-weight: 700;
+            color: var(--border);
+            line-height: 1;
+            margin-bottom: 16px;
+        }
+        .error-code span { color: var(--accent); }
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        p {
+            color: var(--text-muted);
+            font-size: 16px;
+            margin-bottom: 32px;
+            max-width: 420px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 28px;
+            background: var(--accent);
+            color: #fff;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.15s;
+        }
+        .btn:hover { background: var(--accent-hover); color: #fff; }
+
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        @media (max-width: 480px) {
+            .error-code { font-size: 80px; }
+            nav .links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/#how-it-works">How It Works</a>
+            <a href="/#features">Features</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            <a href="/guide">Docs</a>
+        </div>
+    </div>
+</nav>
+
+<div class="content">
+    <div>
+        <div class="error-code">4<span>0</span>4</div>
+        <h1>Page not found</h1>
+        <p>The page you're looking for doesn't exist or has been moved.</p>
+        <a href="/" class="btn">Back to Home</a>
+    </div>
+</div>
+
+<footer>
+    AgentGate &mdash; Open source, built for the agent economy.
+</footer>
+
+</body>
+</html>

@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from agentgate import __version__
 from agentgate.core.config import settings
@@ -64,6 +65,19 @@ app.include_router(ucp_router)
 app.include_router(ucp_router, prefix="/v1")
 app.include_router(deploy_router)
 app.include_router(deploy_router, prefix="/v1")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept:
+            html = (STATIC_DIR / "404.html").read_text()
+            return HTMLResponse(content=html, status_code=404)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
