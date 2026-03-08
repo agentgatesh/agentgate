@@ -4120,3 +4120,136 @@ def test_sdk_ucp_checkout_complete_missing():
         assert False, "Should have raised"
     except AgentGateError as e:
         assert e.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Self-service Signup
+# ---------------------------------------------------------------------------
+
+
+def test_signup_page():
+    response = client.get("/signup")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Create your account" in response.text
+    assert "AgentGate" in response.text
+
+
+def test_signup_schema():
+    from agentgate.server.schemas import SignupRequest
+
+    req = SignupRequest(name="test-org", email="test@example.com")
+    assert req.name == "test-org"
+    assert req.email == "test@example.com"
+
+
+def test_signup_schema_validation():
+    from pydantic import ValidationError
+
+    from agentgate.server.schemas import SignupRequest
+
+    with pytest.raises(ValidationError):
+        SignupRequest(name="", email="test@example.com")
+    with pytest.raises(ValidationError):
+        SignupRequest(name="test", email="")
+
+
+def test_signup_endpoint_creates_org():
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # add() is sync, not async
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None  # No existing org
+    mock_session.execute.return_value = mock_result
+
+    mock_org = MagicMock()
+    mock_org.id = uuid.uuid4()
+    mock_org.name = "new-org"
+    mock_org.tier = "free"
+
+    async def fake_refresh(obj):
+        obj.id = mock_org.id
+        obj.name = "new-org"
+        obj.tier = "free"
+
+    mock_session.refresh = fake_refresh
+
+    with patch("agentgate.server.org_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.post(
+            "/orgs/signup",
+            json={"name": "new-org", "email": "user@example.com"},
+        )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["org_name"] == "new-org"
+    assert "api_key" in data
+    assert len(data["api_key"]) > 20
+    assert data["tier"] == "free"
+
+
+def test_signup_duplicate_org_name():
+    mock_session = AsyncMock()
+    mock_result = MagicMock()
+    mock_existing = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_existing  # Already exists
+    mock_session.execute.return_value = mock_result
+
+    with patch("agentgate.server.org_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.post(
+            "/orgs/signup",
+            json={"name": "existing-org", "email": "user@example.com"},
+        )
+
+    assert response.status_code == 409
+    assert "already taken" in response.json()["detail"]
+
+
+def test_signup_no_auth_required():
+    """Signup should not require any auth header (not 401/403)."""
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # add() is sync
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result
+    mock_session.refresh = AsyncMock()
+
+    with patch("agentgate.server.org_routes.async_session") as mock_ctx:
+        mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        response = client.post(
+            "/orgs/signup",
+            json={"name": "noauth-org", "email": "noauth@example.com"},
+        )
+
+    # Must not be 401/403 — signup is public
+    assert response.status_code != 401
+    assert response.status_code != 403
+
+
+def test_org_model_has_email():
+    from agentgate.db.models import Organization
+
+    assert hasattr(Organization, "email")
+    org = Organization(name="test", api_key_hash="abc", email="test@example.com")
+    assert org.email == "test@example.com"
+
+
+def test_org_model_email_optional():
+    from agentgate.db.models import Organization
+
+    org = Organization(name="test", api_key_hash="abc")
+    assert org.email is None
+
+
+def test_landing_page_has_signup_link():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "/signup" in response.text
+    assert "Sign Up" in response.text

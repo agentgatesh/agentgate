@@ -47,6 +47,7 @@ class Organization(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     api_key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     secondary_api_key_hash: Mapped[str | None] = mapped_column(
         String(255), nullable=True, default=None,

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+
+    <title>Sign Up — AgentGate</title>
+    <meta name="description" content="Create a free AgentGate account. Deploy, connect, and monetize AI agents in seconds.">
+    <meta name="author" content="AgentGate">
+    <link rel="canonical" href="https://agentgate.sh/signup">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agentgate.sh/signup">
+    <meta property="og:title" content="Sign Up — AgentGate">
+    <meta property="og:description" content="Create a free AgentGate account. Deploy, connect, and monetize AI agents in seconds.">
+    <meta property="og:site_name" content="AgentGate">
+    <meta property="og:image" content="https://agentgate.sh/static/og_image.png">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Sign Up — AgentGate">
+    <meta name="twitter:description" content="Create a free AgentGate account. Deploy, connect, and monetize AI agents in seconds.">
+    <meta name="twitter:image" content="https://agentgate.sh/static/og_image.png">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+            --green: #22c55e;
+            --red: #ef4444;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        /* Nav */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+        }
+        .nav-inner {
+            max-width: 1100px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo { font-size: 20px; font-weight: 700; color: var(--text); }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+
+        /* Content */
+        .content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            width: 100%;
+            max-width: 460px;
+        }
+        .card h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .card .subtitle {
+            color: var(--text-muted);
+            font-size: 15px;
+            margin-bottom: 28px;
+        }
+        .field {
+            margin-bottom: 20px;
+        }
+        .field label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text);
+        }
+        .field input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .field input:focus {
+            border-color: var(--accent);
+        }
+        .field .hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .error-msg {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: var(--red);
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        /* Success state */
+        .success-card {
+            display: none;
+        }
+        .success-card h1 {
+            color: var(--green);
+        }
+        .api-key-box {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            position: relative;
+        }
+        .api-key-box label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .api-key-value {
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            font-size: 14px;
+            word-break: break-all;
+            color: var(--green);
+            line-height: 1.5;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--border);
+            border: none;
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .copy-btn:hover { background: #333; color: var(--text); }
+        .warning {
+            background: rgba(234,179,8,0.1);
+            border: 1px solid rgba(234,179,8,0.3);
+            color: #eab308;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .next-steps {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+        .next-steps h3 {
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+        .next-steps code {
+            display: block;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .next-steps a {
+            display: inline-block;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        @media (max-width: 480px) {
+            .card { padding: 24px; }
+            nav .links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-inner">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/#how-it-works">How It Works</a>
+            <a href="/#features">Features</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/marketplace">Marketplace</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            <a href="/guide">Docs</a>
+        </div>
+    </div>
+</nav>
+
+<div class="content">
+    <!-- Signup form -->
+    <div class="card signup-form" id="signupForm">
+        <h1>Create your account</h1>
+        <p class="subtitle">Get a free API key to start deploying agents.</p>
+
+        <div class="error-msg" id="errorMsg"></div>
+
+        <div class="field">
+            <label for="orgName">Organization name</label>
+            <input type="text" id="orgName" placeholder="my-org" maxlength="255" autocomplete="organization">
+            <div class="hint">This identifies your account. Use lowercase, no spaces.</div>
+        </div>
+
+        <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" maxlength="255" autocomplete="email">
+            <div class="hint">For account recovery and important updates only.</div>
+        </div>
+
+        <button class="btn" id="signupBtn" onclick="doSignup()">Create Account</button>
+    </div>
+
+    <!-- Success state -->
+    <div class="card success-card" id="successCard">
+        <h1>Account created</h1>
+        <p class="subtitle" id="successSubtitle"></p>
+
+        <div class="warning">Save your API key now — it will not be shown again.</div>
+
+        <div class="api-key-box">
+            <label>Your API Key</label>
+            <button class="copy-btn" onclick="copyKey()">Copy</button>
+            <div class="api-key-value" id="apiKeyValue"></div>
+        </div>
+
+        <div class="next-steps">
+            <h3>Next steps</h3>
+            <code>pip install agentgatesh</code>
+            <code>export AGENTGATE_API_KEY=<span id="keyPlaceholder">your-key</span></code>
+            <code>agentgate deploy ./my-agent</code>
+            <a href="/guide">Read the docs &rarr;</a>
+        </div>
+    </div>
+</div>
+
+<footer>
+    AgentGate &mdash; Open source, built for the agent economy.
+</footer>
+
+<script>
+    async function doSignup() {
+        const nameEl = document.getElementById('orgName');
+        const emailEl = document.getElementById('email');
+        const errEl = document.getElementById('errorMsg');
+        const btn = document.getElementById('signupBtn');
+
+        const name = nameEl.value.trim();
+        const email = emailEl.value.trim();
+
+        errEl.style.display = 'none';
+
+        if (!name) {
+            errEl.textContent = 'Organization name is required.';
+            errEl.style.display = 'block';
+            return;
+        }
+        if (!email || !email.includes('@')) {
+            errEl.textContent = 'A valid email is required.';
+            errEl.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Creating...';
+
+        try {
+            const res = await fetch('/orgs/signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.detail || 'Signup failed');
+            }
+
+            // Show success
+            document.getElementById('signupForm').style.display = 'none';
+            document.getElementById('successCard').style.display = 'block';
+            document.getElementById('successSubtitle').textContent =
+                'Organization "' + data.org_name + '" is ready.';
+            document.getElementById('apiKeyValue').textContent = data.api_key;
+            document.getElementById('keyPlaceholder').textContent = data.api_key;
+        } catch (e) {
+            errEl.textContent = e.message;
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
+        }
+    }
+
+    function copyKey() {
+        const key = document.getElementById('apiKeyValue').textContent;
+        navigator.clipboard.writeText(key).then(() => {
+            const btn = document.querySelector('.copy-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && document.getElementById('signupForm').style.display !== 'none') {
+            doSignup();
+        }
+    });
+</script>
+
+</body>
+</html>

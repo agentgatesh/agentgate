@@ -47,6 +47,11 @@ class AgentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SignupRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    email: str = Field(..., min_length=3, max_length=255)
+
+
 class OrgCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     api_key: str = Field(..., min_length=8, exclude=True)

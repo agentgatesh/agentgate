@@ -114,6 +114,11 @@ async def marketplace_page():
     return (STATIC_DIR / "marketplace.html").read_text()
 
 
+@app.get("/signup", response_class=HTMLResponse)
+async def signup_page():
+    return (STATIC_DIR / "signup.html").read_text()
+
+
 @app.get("/billing", response_class=HTMLResponse)
 async def billing_page():
     return (STATIC_DIR / "billing.html").read_text()

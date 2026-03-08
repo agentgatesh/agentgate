@@ -11,9 +11,50 @@ from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent, Organization, TaskLog, Transaction
 from agentgate.server.auth import bearer_scheme, hash_api_key
-from agentgate.server.schemas import AgentResponse, OrgCreate, OrgResponse, OrgUpdate
+from agentgate.server.schemas import AgentResponse, OrgCreate, OrgResponse, OrgUpdate, SignupRequest
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
+
+
+# ---------------------------------------------------------------------------
+# Public signup — no auth required
+# ---------------------------------------------------------------------------
+
+
+@router.post("/signup", status_code=201)
+async def signup(data: SignupRequest):
+    """Create a new organization with a generated API key. No auth required.
+
+    Returns the API key (shown only once — save it!).
+    """
+    import secrets
+
+    async with async_session() as session:
+        existing = await session.execute(
+            select(Organization).where(Organization.name == data.name)
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Organization name already taken")
+
+        api_key = secrets.token_urlsafe(32)
+        org = Organization(
+            name=data.name,
+            email=data.email,
+            api_key_hash=hash_api_key(api_key),
+            tier="free",
+        )
+        session.add(org)
+        await session.commit()
+        await session.refresh(org)
+
+    return {
+        "message": "Organization created successfully",
+        "org_id": str(org.id),
+        "org_name": org.name,
+        "api_key": api_key,
+        "tier": org.tier,
+        "note": "Save your API key — it won't be shown again.",
+    }
 
 
 async def _get_org_by_key(session, credentials: HTTPAuthorizationCredentials) -> Organization:
