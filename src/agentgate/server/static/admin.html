@@ -442,14 +442,53 @@ async function showUserDetail(id) {
                         <span>Since ${u.created_at ? u.created_at.substring(0, 10) : "—"}</span>
                     </div>
                 </div>
-                <button class="btn-danger" onclick="deleteUser('${u.id}')">Delete User</button>
+                <div style="display:flex;gap:8px">
+                    <button class="btn-primary" style="padding:8px 16px;font-size:13px" onclick="resetKey('${u.id}')">Reset API Key</button>
+                    <button class="btn-danger" onclick="deleteUser('${u.id}')">Delete User</button>
+                </div>
             </div>
+
             <div class="detail-grid">
                 ${kpi("Tier", '<span class="badge ' + tierBadge(u.tier) + '">' + u.tier + '</span>', "")}
                 ${kpi("Balance", "$" + u.balance, "")}
                 ${kpi("Total Spent", "$" + u.total_spent, "")}
                 ${kpi("Total Earned", "$" + u.total_earned, "")}
             </div>
+
+            <div id="newKeyBanner" style="display:none;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:16px;margin-bottom:20px">
+                <div style="font-weight:600;color:var(--green);margin-bottom:6px">New API Key Generated</div>
+                <div style="font-family:monospace;font-size:13px;word-break:break-all;color:var(--green)" id="newKeyValue"></div>
+                <div style="font-size:12px;color:var(--yellow);margin-top:8px">Save this key now — it won't be shown again.</div>
+            </div>
+
+            <div class="panel">
+                <h3>Edit User</h3>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                    <div>
+                        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Tier</label>
+                        <select id="editTier" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+                            <option value="free" ${u.tier === "free" ? "selected" : ""}>Free</option>
+                            <option value="pro" ${u.tier === "pro" ? "selected" : ""}>Pro</option>
+                            <option value="enterprise" ${u.tier === "enterprise" ? "selected" : ""}>Enterprise</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Balance ($)</label>
+                        <input type="number" id="editBalance" value="${u.balance}" step="0.01" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Rate Limit (req/s)</label>
+                        <input type="number" id="editRateLimit" value="${u.rate_limit}" step="0.1" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+                    </div>
+                    <div>
+                        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Rate Burst</label>
+                        <input type="number" id="editRateBurst" value="${u.rate_burst}" step="1" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
+                    </div>
+                </div>
+                <button class="btn-primary" style="padding:8px 20px;font-size:13px" onclick="saveUser('${u.id}')">Save Changes</button>
+                <span id="saveMsg" style="font-size:13px;color:var(--green);margin-left:12px;display:none">Saved!</span>
+            </div>
+
             <div class="panel">
                 <h3>Agents (${u.agents.length})</h3>
                 ${u.agents.length ? `<table class="data-table"><thead><tr><th>Name</th><th>Version</th><th>Price</th><th>Deployed</th><th>Created</th></tr></thead><tbody>
@@ -476,6 +515,38 @@ async function showUserDetail(id) {
             </div>
         `;
     } catch { el.innerHTML = '<p class="no-data">Error loading user details.</p>'; }
+}
+
+async function saveUser(id) {
+    const body = {
+        tier: document.getElementById("editTier").value,
+        balance: parseFloat(document.getElementById("editBalance").value),
+        rate_limit: parseFloat(document.getElementById("editRateLimit").value),
+        rate_burst: parseInt(document.getElementById("editRateBurst").value),
+    };
+    try {
+        await fetch("/admin/api/users/" + id, {
+            method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const msg = document.getElementById("saveMsg");
+        msg.style.display = "inline"; setTimeout(() => { msg.style.display = "none"; }, 2000);
+    } catch {}
+}
+
+async function resetKey(id) {
+    if (!confirm("This will invalidate the current API key. The user will need to update their key. Continue?")) return;
+    try {
+        const r = await fetch("/admin/api/users/" + id + "/reset-key", {
+            method: "POST", headers: authHeaders(),
+        });
+        const d = await r.json();
+        if (r.ok) {
+            const banner = document.getElementById("newKeyBanner");
+            document.getElementById("newKeyValue").textContent = d.api_key;
+            banner.style.display = "block";
+        }
+    } catch {}
 }
 
 async function deleteUser(id) {

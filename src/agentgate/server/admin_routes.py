@@ -293,6 +293,34 @@ async def admin_update_user(org_id: str, request: Request, _user: str = Depends(
     return {"message": "Updated", "id": str(org.id)}
 
 
+@router.post("/users/{org_id}/reset-key")
+async def admin_reset_user_key(
+    org_id: str, _user: str = Depends(_get_admin_user),
+):
+    """Generate a new API key for an organization. Returns the key once."""
+    import secrets
+
+    from agentgate.server.auth import hash_api_key
+
+    async with async_session() as session:
+        org = (await session.execute(
+            select(Organization).where(Organization.id == org_id)
+        )).scalar_one_or_none()
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        new_key = secrets.token_urlsafe(32)
+        org.api_key_hash = hash_api_key(new_key)
+        org.secondary_api_key_hash = None
+        await session.commit()
+
+    return {
+        "message": "API key reset successfully",
+        "api_key": new_key,
+        "note": "Save this key — it won't be shown again.",
+    }
+
+
 @router.delete("/users/{org_id}")
 async def admin_delete_user(org_id: str, _user: str = Depends(_get_admin_user)):
     async with async_session() as session:
