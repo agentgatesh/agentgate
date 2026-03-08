@@ -422,28 +422,14 @@ async def topup_org_wallet(
     """Add funds to an organization's wallet. Admin or org owner.
 
     Body: {"amount": 10.0}
+
+    NOTE: Currently disabled — Stripe integration coming soon.
     """
-    if caller_org and caller_org.id != org_id:
-        raise HTTPException(status_code=403, detail="Access denied to this organization")
-
-    amount = body.get("amount", 0)
-    if not isinstance(amount, (int, float)) or amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be a positive number")
-
-    async with async_session() as session:
-        org = await session.get(Organization, org_id)
-        if not org:
-            raise HTTPException(status_code=404, detail="Organization not found")
-        org.balance = round(org.balance + amount, 4)
-        await session.commit()
-        await session.refresh(org)
-
-    return {
-        "org_id": str(org_id),
-        "org_name": org.name,
-        "amount_added": amount,
-        "new_balance": round(org.balance, 4),
-    }
+    raise HTTPException(
+        status_code=503,
+        detail="Coming soon — payment integration in progress. "
+        "Wallet top-up will be available once Stripe is connected.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +446,8 @@ async def change_org_tier(
     """Change an organization's tier. Admin or org owner.
 
     Body: {"tier": "pro"}
+
+    NOTE: Upgrades to paid tiers currently disabled — Stripe integration coming soon.
     """
     if caller_org and caller_org.id != org_id:
         raise HTTPException(status_code=403, detail="Access denied to this organization")
@@ -469,6 +457,13 @@ async def change_org_tier(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid tier: {new_tier}. Must be one of: {', '.join(TIER_LIMITS.keys())}",
+        )
+
+    # Block upgrades to paid tiers until Stripe is integrated
+    if new_tier in ("pro", "enterprise"):
+        raise HTTPException(
+            status_code=503,
+            detail="Coming soon — paid tiers will be available once Stripe is connected.",
         )
 
     async with async_session() as session:
