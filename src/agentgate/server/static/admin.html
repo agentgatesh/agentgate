@@ -85,14 +85,14 @@
         .sidebar-footer { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); }
         .sidebar-footer a { font-size: 13px; color: var(--text-muted); }
 
-        .main { margin-left: 220px; padding: 32px; min-height: 100vh; overflow-y: auto; }
-        .page { display: none; }
+        .main { margin-left: 220px; padding: 32px; min-height: 100vh; overflow-y: auto; width: calc(100% - 220px); }
+        .page { display: none; max-width: 100%; }
         .page.active { display: block; }
         .page-title { font-size: 22px; font-weight: 700; margin-bottom: 24px; }
 
         /* KPI cards */
         .kpi-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            display: grid; grid-template-columns: repeat(3, 1fr);
             gap: 16px; margin-bottom: 32px;
         }
         .kpi-card {
@@ -168,7 +168,8 @@
         .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
         .detail-header h2 { font-size: 20px; font-weight: 700; }
         .detail-meta { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); margin-top: 6px; }
-        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+        .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
         .btn-danger {
             padding: 8px 16px; background: rgba(239,68,68,0.15); color: var(--red);
             border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; font-size: 13px;
@@ -178,9 +179,10 @@
 
         @media (max-width: 768px) {
             .sidebar { display: none; }
-            .main { margin-left: 0; padding: 20px; }
+            .main { margin-left: 0; padding: 20px; width: 100%; }
             .kpi-grid { grid-template-columns: 1fr 1fr; }
-            .detail-grid { grid-template-columns: 1fr; }
+            .charts-row { grid-template-columns: 1fr; }
+            .detail-grid { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
@@ -232,13 +234,15 @@
         <div class="page active" id="page-dashboard">
             <div class="page-title">Dashboard</div>
             <div class="kpi-grid" id="kpiGrid"></div>
-            <div class="chart-container">
-                <h3>Tasks (last 30 days)</h3>
-                <div class="chart-bars" id="tasksChart"></div>
-            </div>
-            <div class="chart-container">
-                <h3>Signups (last 30 days)</h3>
-                <div class="chart-bars" id="signupsChart"></div>
+            <div class="charts-row">
+                <div class="chart-container">
+                    <h3>Tasks (last 30 days)</h3>
+                    <div class="chart-bars" id="tasksChart"></div>
+                </div>
+                <div class="chart-container">
+                    <h3>Signups (last 30 days)</h3>
+                    <div class="chart-bars" id="signupsChart"></div>
+                </div>
             </div>
         </div>
 
@@ -463,7 +467,7 @@ async function showUserDetail(id) {
 
             <div class="panel">
                 <h3>Edit User</h3>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
                     <div>
                         <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Tier</label>
                         <select id="editTier" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px">
