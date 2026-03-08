@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -65,6 +66,8 @@ app.include_router(ucp_router)
 app.include_router(ucp_router, prefix="/v1")
 app.include_router(deploy_router)
 app.include_router(deploy_router, prefix="/v1")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.exception_handler(StarletteHTTPException)
