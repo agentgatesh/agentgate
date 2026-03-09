@@ -157,6 +157,21 @@ async def ratelimits_page():
     return (STATIC_DIR / "ratelimits.html").read_text()
 
 
+@app.get("/terms", response_class=HTMLResponse)
+async def terms_page():
+    return (STATIC_DIR / "terms.html").read_text()
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_page():
+    return (STATIC_DIR / "privacy.html").read_text()
+
+
+@app.get("/refund", response_class=HTMLResponse)
+async def refund_page():
+    return (STATIC_DIR / "refund.html").read_text()
+
+
 @app.get("/health/agents")
 @app.get("/v1/health/agents")
 async def agents_health():

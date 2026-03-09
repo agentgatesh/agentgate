@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+
+    <title>Privacy Policy — AgentGate</title>
+    <meta name="description" content="AgentGate Privacy Policy. Learn how we collect, use, and protect your personal data.">
+    <link rel="canonical" href="https://agentgate.sh/privacy">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agentgate.sh/privacy">
+    <meta property="og:title" content="Privacy Policy — AgentGate">
+    <meta property="og:description" content="AgentGate Privacy Policy.">
+    <meta property="og:site_name" content="AgentGate">
+    <meta property="og:image" content="https://agentgate.sh/static/og_image.png">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Nav */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1100px;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            padding: 64px 0 48px;
+        }
+        .page-header h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .page-header p {
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        /* Legal content */
+        .legal {
+            padding-bottom: 80px;
+        }
+        .legal h2 {
+            font-size: 22px;
+            font-weight: 700;
+            margin: 40px 0 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        .legal h2:first-child {
+            border-top: none;
+            margin-top: 0;
+        }
+        .legal h3 {
+            font-size: 17px;
+            font-weight: 600;
+            margin: 24px 0 8px;
+        }
+        .legal p {
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+        .legal ul, .legal ol {
+            margin: 0 0 12px 24px;
+            color: var(--text);
+        }
+        .legal li {
+            margin-bottom: 6px;
+        }
+        .legal table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 14px;
+        }
+        .legal table th,
+        .legal table td {
+            padding: 10px 14px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+        .legal table th {
+            background: var(--surface);
+            font-weight: 600;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        footer .container { max-width: 1100px; }
+        footer a { color: var(--text-muted); }
+        footer a:hover { color: var(--text); }
+
+        @media (max-width: 800px) {
+            .page-header { padding: 48px 0 32px; }
+            .page-header h1 { font-size: 28px; }
+            nav .links { gap: 12px; font-size: 12px; }
+        }
+        @media (max-width: 480px) {
+            nav .links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container" style="max-width:1100px;">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/#features">Features</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/guide">Docs</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            <a id="authLink" href="/signup" style="color:var(--accent);font-weight:600;">Sign Up</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <div class="page-header">
+        <div class="container">
+            <h1>Privacy Policy</h1>
+            <p>Last updated: March 10, 2026</p>
+        </div>
+    </div>
+
+    <div class="container legal">
+
+        <h2>1. Introduction</h2>
+        <p>This Privacy Policy explains how <strong>INNOWEB FZCO</strong> ("Company", "we", "us"), operating the AgentGate platform at <a href="https://agentgate.sh">agentgate.sh</a>, collects, uses, stores, and protects your personal data.</p>
+        <p>We are committed to protecting your privacy and complying with the EU General Data Protection Regulation (GDPR), the UAE Federal Decree-Law No. 45 of 2021 on the Protection of Personal Data (PDPL), and other applicable data protection laws.</p>
+
+        <h2>2. Data Controller</h2>
+        <p>The data controller responsible for your personal data is:</p>
+        <p>
+            <strong>INNOWEB FZCO</strong><br>
+            IFZA Business Park, DDP<br>
+            PO Box 342001, Dubai, UAE<br>
+            Email: <a href="mailto:info@agentgate.sh">info@agentgate.sh</a>
+        </p>
+
+        <h2>3. Data We Collect</h2>
+
+        <h3>3.1 Account Data</h3>
+        <p>When you create an account, we collect:</p>
+        <ul>
+            <li><strong>Organization name</strong> — your chosen identifier on the platform</li>
+            <li><strong>Email address</strong> — used for account identification and communication</li>
+            <li><strong>Password</strong> — stored as a PBKDF2 hash (we never store plain-text passwords)</li>
+        </ul>
+
+        <h3>3.2 OAuth Data</h3>
+        <p>If you sign up or log in via Google or GitHub, we receive:</p>
+        <ul>
+            <li><strong>OAuth provider name</strong> (Google or GitHub)</li>
+            <li><strong>OAuth user ID</strong> — a unique identifier from the provider</li>
+            <li><strong>Email address</strong> — as provided by the OAuth provider</li>
+        </ul>
+        <p>We do not receive or store your OAuth provider password.</p>
+
+        <h3>3.3 API Keys</h3>
+        <p>API keys are generated for programmatic access. We store only the <strong>SHA-256 hash</strong> of your API key. The plain-text key is shown to you once at creation and cannot be retrieved afterward.</p>
+
+        <h3>3.4 Usage Data</h3>
+        <p>We automatically collect:</p>
+        <ul>
+            <li><strong>IP address</strong> — logged with each API request for security and rate limiting</li>
+            <li><strong>Task logs</strong> — agent invocation metadata (agent name, status, latency, timestamp)</li>
+            <li><strong>Request metadata</strong> — HTTP method, path, user agent, response status code</li>
+        </ul>
+
+        <h3>3.5 Payment Data</h3>
+        <p>Payment processing is handled by Stripe. We do <strong>not</strong> store credit card numbers or bank account details. Stripe may collect and process payment information according to their <a href="https://stripe.com/privacy">Privacy Policy</a>. We store only:</p>
+        <ul>
+            <li>Transaction amounts and timestamps</li>
+            <li>Wallet balance</li>
+            <li>Subscription tier and status</li>
+        </ul>
+
+        <h3>3.6 Agent Data</h3>
+        <p>When you register or deploy agents, we store:</p>
+        <ul>
+            <li>Agent name, description, URL, version, tags, skills</li>
+            <li>Agent authentication configuration</li>
+            <li>Deployment metadata (container IDs, ports)</li>
+        </ul>
+
+        <h2>4. How We Use Your Data</h2>
+        <p>We use your personal data for the following purposes:</p>
+        <table>
+            <tr>
+                <th>Purpose</th>
+                <th>Legal Basis (GDPR)</th>
+            </tr>
+            <tr>
+                <td>Provide and maintain the Service</td>
+                <td>Performance of contract (Art. 6(1)(b))</td>
+            </tr>
+            <tr>
+                <td>Process payments and manage billing</td>
+                <td>Performance of contract (Art. 6(1)(b))</td>
+            </tr>
+            <tr>
+                <td>Authenticate users and secure accounts</td>
+                <td>Performance of contract (Art. 6(1)(b))</td>
+            </tr>
+            <tr>
+                <td>Enforce rate limits and prevent abuse</td>
+                <td>Legitimate interest (Art. 6(1)(f))</td>
+            </tr>
+            <tr>
+                <td>Generate usage analytics and platform metrics</td>
+                <td>Legitimate interest (Art. 6(1)(f))</td>
+            </tr>
+            <tr>
+                <td>Send service-related communications</td>
+                <td>Legitimate interest (Art. 6(1)(f))</td>
+            </tr>
+            <tr>
+                <td>Comply with legal obligations</td>
+                <td>Legal obligation (Art. 6(1)(c))</td>
+            </tr>
+        </table>
+
+        <h2>5. Data Retention</h2>
+        <ul>
+            <li><strong>Account data</strong> — retained for the lifetime of your account, deleted upon account deletion</li>
+            <li><strong>Task logs</strong> — retained for 30 days, then automatically purged (capped at 10,000 logs per agent)</li>
+            <li><strong>Transaction records</strong> — retained for 7 years as required by applicable tax and accounting regulations</li>
+            <li><strong>IP addresses in logs</strong> — retained for 30 days</li>
+        </ul>
+
+        <h2>6. Sub-Processors</h2>
+        <p>We share your data with the following third-party service providers, strictly for the purposes of operating the Service:</p>
+        <table>
+            <tr>
+                <th>Sub-Processor</th>
+                <th>Purpose</th>
+                <th>Data Shared</th>
+                <th>Location</th>
+            </tr>
+            <tr>
+                <td><strong>Stripe, Inc.</strong></td>
+                <td>Payment processing</td>
+                <td>Email, payment details, transaction amounts</td>
+                <td>USA (Privacy Shield certified)</td>
+            </tr>
+            <tr>
+                <td><strong>DigitalOcean, LLC</strong></td>
+                <td>Infrastructure hosting</td>
+                <td>All platform data (stored on our servers)</td>
+                <td>Germany (FRA1 datacenter)</td>
+            </tr>
+            <tr>
+                <td><strong>Google LLC</strong></td>
+                <td>OAuth authentication</td>
+                <td>OAuth tokens (during login flow only)</td>
+                <td>USA</td>
+            </tr>
+            <tr>
+                <td><strong>GitHub, Inc.</strong></td>
+                <td>OAuth authentication</td>
+                <td>OAuth tokens (during login flow only)</td>
+                <td>USA</td>
+            </tr>
+        </table>
+        <p>We do not sell your personal data to any third party.</p>
+
+        <h2>7. International Data Transfers</h2>
+        <p>Our servers are located in Germany (DigitalOcean FRA1). When data is transferred to sub-processors in the United States, we rely on Standard Contractual Clauses (SCCs) or equivalent safeguards to ensure adequate protection as required by the GDPR.</p>
+
+        <h2>8. Your Rights (GDPR)</h2>
+        <p>If you are located in the European Economic Area (EEA), you have the following rights regarding your personal data:</p>
+        <ul>
+            <li><strong>Right of Access</strong> — request a copy of the personal data we hold about you</li>
+            <li><strong>Right to Rectification</strong> — request correction of inaccurate or incomplete data</li>
+            <li><strong>Right to Erasure</strong> — request deletion of your personal data ("right to be forgotten")</li>
+            <li><strong>Right to Restrict Processing</strong> — request that we limit how we use your data</li>
+            <li><strong>Right to Data Portability</strong> — receive your data in a structured, machine-readable format</li>
+            <li><strong>Right to Object</strong> — object to processing based on legitimate interests</li>
+            <li><strong>Right to Withdraw Consent</strong> — where processing is based on consent, withdraw it at any time</li>
+        </ul>
+        <p>To exercise any of these rights, contact us at <a href="mailto:info@agentgate.sh">info@agentgate.sh</a>. We will respond within 30 days.</p>
+        <p>You also have the right to lodge a complaint with a supervisory authority in your country of residence.</p>
+
+        <h2>9. Cookies and Tracking</h2>
+        <p>We use a minimal set of cookies strictly necessary for the Service:</p>
+        <ul>
+            <li><strong>Session cookie</strong> ("session") — an HMAC-signed token for authentication. Expires after 7 days. Essential for login functionality.</li>
+        </ul>
+        <p>We do <strong>not</strong> use analytics cookies, advertising cookies, or third-party tracking scripts. We do not use Google Analytics or similar services.</p>
+
+        <h2>10. Security</h2>
+        <p>We implement appropriate technical and organizational measures to protect your data:</p>
+        <ul>
+            <li>All traffic encrypted via HTTPS (TLS 1.2+)</li>
+            <li>Passwords hashed with PBKDF2 (SHA-256, 600,000 iterations)</li>
+            <li>API keys stored as SHA-256 hashes</li>
+            <li>Database access restricted to internal network only</li>
+            <li>Agent containers run in isolated Docker environments</li>
+            <li>Rate limiting to prevent brute-force attacks</li>
+        </ul>
+
+        <h2>11. Children's Privacy</h2>
+        <p>The Service is not intended for individuals under the age of 16. We do not knowingly collect personal data from children. If we become aware that we have collected data from a child under 16, we will delete it promptly.</p>
+
+        <h2>12. Changes to This Policy</h2>
+        <p>We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy on this page and updating the "Last updated" date. Continued use of the Service after changes constitutes acceptance.</p>
+
+        <h2>13. Contact</h2>
+        <p>For privacy-related questions or to exercise your data rights, contact us at:</p>
+        <p>
+            <strong>INNOWEB FZCO</strong><br>
+            IFZA Business Park, DDP<br>
+            PO Box 342001, Dubai, UAE<br>
+            Email: <a href="mailto:info@agentgate.sh">info@agentgate.sh</a>
+        </p>
+
+    </div>
+</main>
+
+<footer>
+    <div class="container" style="max-width:1100px;">
+        <p>
+            AgentGate &mdash; Open source, built for the agent economy.
+            &nbsp;&middot;&nbsp;
+            <a href="/terms">Terms</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/privacy">Privacy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/refund">Refund Policy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/guide">Docs</a>
+        </p>
+    </div>
+</footer>
+
+<script>fetch("/auth/me").then(r=>{if(r.ok){const e=document.getElementById("authLink");if(e){e.href="/account";e.textContent="Account"}}}).catch(()=>{});</script>
+</body>
+</html>

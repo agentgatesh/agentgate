@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+
+    <title>Terms of Service — AgentGate</title>
+    <meta name="description" content="AgentGate Terms of Service. Read our terms and conditions for using the AgentGate platform.">
+    <link rel="canonical" href="https://agentgate.sh/terms">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://agentgate.sh/terms">
+    <meta property="og:title" content="Terms of Service — AgentGate">
+    <meta property="og:description" content="AgentGate Terms of Service.">
+    <meta property="og:site_name" content="AgentGate">
+    <meta property="og:image" content="https://agentgate.sh/static/og_image.png">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --border: #222;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #3b82f6;
+            --accent-hover: #60a5fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Nav */
+        nav {
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+        nav .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1100px;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+
+        /* Header */
+        .page-header {
+            text-align: center;
+            padding: 64px 0 48px;
+        }
+        .page-header h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .page-header p {
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        /* Legal content */
+        .legal {
+            padding-bottom: 80px;
+        }
+        .legal h2 {
+            font-size: 22px;
+            font-weight: 700;
+            margin: 40px 0 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+        .legal h2:first-child {
+            border-top: none;
+            margin-top: 0;
+        }
+        .legal h3 {
+            font-size: 17px;
+            font-weight: 600;
+            margin: 24px 0 8px;
+        }
+        .legal p {
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+        .legal ul, .legal ol {
+            margin: 0 0 12px 24px;
+            color: var(--text);
+        }
+        .legal li {
+            margin-bottom: 6px;
+        }
+
+        /* Footer */
+        footer {
+            border-top: 1px solid var(--border);
+            padding: 24px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        footer .container { max-width: 1100px; }
+        footer a { color: var(--text-muted); }
+        footer a:hover { color: var(--text); }
+
+        @media (max-width: 800px) {
+            .page-header { padding: 48px 0 32px; }
+            .page-header h1 { font-size: 28px; }
+            nav .links { gap: 12px; font-size: 12px; }
+        }
+        @media (max-width: 480px) {
+            nav .links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container" style="max-width:1100px;">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/#features">Features</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/guide">Docs</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            <a id="authLink" href="/signup" style="color:var(--accent);font-weight:600;">Sign Up</a>
+        </div>
+    </div>
+</nav>
+
+<main>
+    <div class="page-header">
+        <div class="container">
+            <h1>Terms of Service</h1>
+            <p>Last updated: March 10, 2026</p>
+        </div>
+    </div>
+
+    <div class="container legal">
+
+        <h2>1. Agreement to Terms</h2>
+        <p>These Terms of Service ("Terms") constitute a legally binding agreement between you ("User", "you") and <strong>INNOWEB FZCO</strong>, a company registered in the IFZA Business Park, DDP, PO Box 342001, Dubai, United Arab Emirates ("Company", "we", "us"), governing your access to and use of the AgentGate platform available at <a href="https://agentgate.sh">agentgate.sh</a> (the "Service").</p>
+        <p>By creating an account or using the Service, you agree to be bound by these Terms. If you do not agree, do not use the Service.</p>
+
+        <h2>2. Description of Service</h2>
+        <p>AgentGate is an open-source gateway and marketplace for deploying, connecting, and monetizing AI agents. The Service provides:</p>
+        <ul>
+            <li>Agent registration, deployment, and hosting</li>
+            <li>API gateway with routing, authentication, and rate limiting</li>
+            <li>A marketplace for discovering and interacting with AI agents</li>
+            <li>Billing infrastructure including wallet top-ups and subscription plans</li>
+            <li>SDKs and CLI tools for integration</li>
+        </ul>
+
+        <h2>3. Account Registration</h2>
+        <p>To use certain features of the Service, you must create an account. You agree to:</p>
+        <ul>
+            <li>Provide accurate and complete registration information</li>
+            <li>Maintain the security of your account credentials and API keys</li>
+            <li>Notify us immediately of any unauthorized access to your account</li>
+            <li>Accept responsibility for all activity that occurs under your account</li>
+        </ul>
+        <p>You may register using email/password or through OAuth providers (Google, GitHub). We reserve the right to suspend or terminate accounts that violate these Terms.</p>
+
+        <h2>4. Acceptable Use</h2>
+        <p>You agree not to use the Service to:</p>
+        <ul>
+            <li>Deploy agents that perform illegal activities or violate applicable laws</li>
+            <li>Distribute malware, viruses, or other harmful software</li>
+            <li>Engage in unauthorized data collection or scraping</li>
+            <li>Attempt to circumvent rate limits, authentication, or security measures</li>
+            <li>Interfere with the Service's infrastructure or other users' agents</li>
+            <li>Use the Service for spam, phishing, or fraudulent purposes</li>
+            <li>Deploy agents that infringe third-party intellectual property rights</li>
+        </ul>
+        <p>We reserve the right to remove any agent or suspend any account that violates these terms, at our sole discretion and without prior notice.</p>
+
+        <h2>5. Pricing and Payment</h2>
+
+        <h3>5.1 Subscription Plans</h3>
+        <p>The Service offers tiered subscription plans (Free, Pro, Enterprise). Plan features, limits, and pricing are described on our <a href="/pricing">Pricing page</a> and may change with 30 days' notice.</p>
+
+        <h3>5.2 Wallet Top-Ups</h3>
+        <p>Users may add funds to their wallet to pay for interactions with paid agents. Wallet top-ups are processed through Stripe and are subject to a minimum amount of $5.00 USD. <strong>Wallet balances are non-refundable</strong> once credited to your account. See our <a href="/refund">Refund Policy</a> for details.</p>
+
+        <h3>5.3 Platform Fees</h3>
+        <p>The Service charges a platform fee on transactions involving paid agents. The fee percentage depends on your subscription tier and is displayed on the Pricing page.</p>
+
+        <h3>5.4 Currency</h3>
+        <p>All prices and transactions are denominated in United States Dollars (USD).</p>
+
+        <h3>5.5 Payment Processing</h3>
+        <p>Payments are processed by Stripe, Inc. By making a payment, you also agree to <a href="https://stripe.com/legal">Stripe's Terms of Service</a>. We do not store your credit card information.</p>
+
+        <h2>6. Agent Deployment</h2>
+        <p>When you deploy an agent through the Service:</p>
+        <ul>
+            <li>You retain ownership of your agent's code and intellectual property</li>
+            <li>You grant us a limited license to host, run, and serve your agent as necessary to provide the Service</li>
+            <li>You are responsible for the behavior and output of your agents</li>
+            <li>Deployed agents run in isolated Docker containers on our infrastructure</li>
+            <li>We reserve the right to undeploy agents that violate these Terms or pose security risks</li>
+        </ul>
+
+        <h2>7. Intellectual Property</h2>
+        <p>The AgentGate platform software is licensed under the <a href="https://www.gnu.org/licenses/agpl-3.0.html">GNU Affero General Public License v3.0</a> (AGPL-3.0). The AgentGate name, logo, and branding are trademarks of INNOWEB FZCO.</p>
+        <p>User-generated content (agents, configurations, descriptions) remains the property of the respective users.</p>
+
+        <h2>8. Service Availability</h2>
+        <p>We strive to maintain high availability but do not guarantee uninterrupted access to the Service. We may perform maintenance, updates, or experience downtime. We are not liable for any losses resulting from Service interruptions.</p>
+
+        <h2>9. Limitation of Liability</h2>
+        <p>To the maximum extent permitted by law:</p>
+        <ul>
+            <li>The Service is provided "as is" and "as available" without warranties of any kind</li>
+            <li>We are not liable for any indirect, incidental, special, consequential, or punitive damages</li>
+            <li>Our total liability for any claims arising from the Service shall not exceed the amount you have paid us in the 12 months preceding the claim</li>
+            <li>We are not responsible for the output, accuracy, or behavior of agents deployed on the platform</li>
+        </ul>
+
+        <h2>10. Indemnification</h2>
+        <p>You agree to indemnify and hold harmless INNOWEB FZCO, its officers, directors, and employees from any claims, damages, or expenses arising from your use of the Service, your agents' behavior, or your violation of these Terms.</p>
+
+        <h2>11. Termination</h2>
+        <p>Either party may terminate this agreement at any time. You may delete your account through the account settings. We may suspend or terminate your access if you violate these Terms.</p>
+        <p>Upon termination:</p>
+        <ul>
+            <li>Your deployed agents will be undeployed</li>
+            <li>Your wallet balance will not be refunded (see <a href="/refund">Refund Policy</a>)</li>
+            <li>Pro subscriptions will not be refunded for the remaining period</li>
+            <li>We may retain anonymized usage data for analytics purposes</li>
+        </ul>
+
+        <h2>12. Governing Law</h2>
+        <p>These Terms are governed by the laws of the United Arab Emirates and the Emirate of Dubai. Any disputes shall be resolved in the courts of Dubai, UAE.</p>
+
+        <h2>13. Changes to Terms</h2>
+        <p>We may update these Terms from time to time. We will notify users of material changes via email or a prominent notice on the Service. Continued use of the Service after changes constitutes acceptance of the updated Terms.</p>
+
+        <h2>14. Contact</h2>
+        <p>For questions about these Terms, contact us at:</p>
+        <p>
+            <strong>INNOWEB FZCO</strong><br>
+            IFZA Business Park, DDP<br>
+            PO Box 342001, Dubai, UAE<br>
+            Email: <a href="mailto:info@agentgate.sh">info@agentgate.sh</a>
+        </p>
+
+    </div>
+</main>
+
+<footer>
+    <div class="container" style="max-width:1100px;">
+        <p>
+            AgentGate &mdash; Open source, built for the agent economy.
+            &nbsp;&middot;&nbsp;
+            <a href="/terms">Terms</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/privacy">Privacy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/refund">Refund Policy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/guide">Docs</a>
+        </p>
+    </div>
+</footer>
+
+<script>fetch("/auth/me").then(r=>{if(r.ok){const e=document.getElementById("authLink");if(e){e.href="/account";e.textContent="Account"}}}).catch(()=>{});</script>
+</body>
+</html>
