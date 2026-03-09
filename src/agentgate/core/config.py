@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_pro_price_id: str = ""
+    stripe_connect_withdrawal_fee_pct: float = 0.03
+    stripe_connect_min_withdrawal: float = 10.0
 
 
 settings = Settings()

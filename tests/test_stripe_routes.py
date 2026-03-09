@@ -413,3 +413,258 @@ def test_account_subscribe_pro(mock_get_user, mock_stripe_db, mock_stripe, mock_
 def test_account_subscribe_pro_no_auth():
     response = client.post("/account/api/subscribe-pro", json={})
     assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — onboarding
+# ---------------------------------------------------------------------------
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.stripe")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_connect_onboard_new(mock_get_user, mock_db, mock_stripe, mock_settings):
+    org = _make_fake_org(stripe_connect_id=None)
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.base_url = "https://agentgate.sh"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, mock_session = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    mock_account = MagicMock()
+    mock_account.id = "acct_test_123"
+    mock_stripe.Account.create.return_value = mock_account
+
+    mock_link = MagicMock()
+    mock_link.url = "https://connect.stripe.com/setup/test"
+    mock_stripe.AccountLink.create.return_value = mock_link
+
+    cookie = _session_cookie(org)
+    response = client.post(
+        "/account/api/connect-onboard",
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["onboarding_url"] == "https://connect.stripe.com/setup/test"
+    assert data["connect_id"] == "acct_test_123"
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.stripe")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_connect_onboard_existing(mock_get_user, mock_db, mock_stripe, mock_settings):
+    org = _make_fake_org(stripe_connect_id="acct_existing_123")
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.base_url = "https://agentgate.sh"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, _ = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    mock_link = MagicMock()
+    mock_link.url = "https://connect.stripe.com/setup/existing"
+    mock_stripe.AccountLink.create.return_value = mock_link
+
+    cookie = _session_cookie(org)
+    response = client.post(
+        "/account/api/connect-onboard",
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 200
+    assert response.json()["onboarding_url"] == "https://connect.stripe.com/setup/existing"
+
+
+def test_connect_onboard_no_auth():
+    response = client.post("/account/api/connect-onboard")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — status
+# ---------------------------------------------------------------------------
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.stripe")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_connect_status_connected(mock_get_user, mock_db, mock_stripe, mock_settings):
+    org = _make_fake_org(stripe_connect_id="acct_test_456")
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, _ = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    mock_account = MagicMock()
+    mock_account.charges_enabled = True
+    mock_account.payouts_enabled = True
+    mock_account.details_submitted = True
+    mock_stripe.Account.retrieve.return_value = mock_account
+
+    cookie = _session_cookie(org)
+    response = client.get(
+        "/account/api/connect-status",
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connected"] is True
+    assert data["payouts_enabled"] is True
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_connect_status_not_connected(mock_get_user, mock_db, mock_settings):
+    org = _make_fake_org(stripe_connect_id=None)
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, _ = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    cookie = _session_cookie(org)
+    response = client.get(
+        "/account/api/connect-status",
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 200
+    assert response.json()["connected"] is False
+
+
+def test_connect_status_no_auth():
+    response = client.get("/account/api/connect-status")
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — withdrawal
+# ---------------------------------------------------------------------------
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.stripe")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_withdraw_success(mock_get_user, mock_db, mock_stripe, mock_settings):
+    org = _make_fake_org(balance=50.0, stripe_connect_id="acct_test_789")
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, mock_session = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    mock_account = MagicMock()
+    mock_account.payouts_enabled = True
+    mock_stripe.Account.retrieve.return_value = mock_account
+
+    mock_transfer = MagicMock()
+    mock_transfer.id = "tr_test_123"
+    mock_stripe.Transfer.create.return_value = mock_transfer
+
+    cookie = _session_cookie(org)
+    response = client.post(
+        "/account/api/withdraw",
+        json={"amount": 20.0},
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["transfer_id"] == "tr_test_123"
+    assert data["gross_amount"] == 20.0
+    assert data["fee"] == 0.6  # 3% of 20
+    assert data["net_amount"] == 19.4
+    assert org.balance == 30.0  # 50 - 20
+    mock_session.add.assert_called()
+    mock_session.commit.assert_called()
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.stripe")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_withdraw_insufficient_balance(mock_get_user, mock_db, mock_stripe, mock_settings):
+    org = _make_fake_org(balance=5.0, stripe_connect_id="acct_test_789")
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, _ = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    cookie = _session_cookie(org)
+    response = client.post(
+        "/account/api/withdraw",
+        json={"amount": 20.0},
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 400
+    assert "Insufficient" in response.json()["detail"]
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.stripe")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_withdraw_no_connect(mock_get_user, mock_db, mock_stripe, mock_settings):
+    org = _make_fake_org(balance=50.0, stripe_connect_id=None)
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, _ = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    cookie = _session_cookie(org)
+    response = client.post(
+        "/account/api/withdraw",
+        json={"amount": 20.0},
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 400
+    assert "No Stripe account" in response.json()["detail"]
+
+
+@patch("agentgate.server.stripe_routes.settings")
+@patch("agentgate.server.stripe_routes.async_session")
+@patch("agentgate.server.account_routes.get_current_user")
+def test_withdraw_below_minimum(mock_get_user, mock_db, mock_settings):
+    org = _make_fake_org(balance=50.0, stripe_connect_id="acct_test")
+    mock_get_user.return_value = org
+    mock_settings.stripe_secret_key = "sk_test_123"
+    mock_settings.stripe_connect_withdrawal_fee_pct = 0.03
+    mock_settings.stripe_connect_min_withdrawal = 10.0
+    db_factory, _ = _mock_db_returning(org)
+    mock_db.side_effect = db_factory.side_effect
+    mock_db.return_value = db_factory.return_value
+
+    cookie = _session_cookie(org)
+    response = client.post(
+        "/account/api/withdraw",
+        json={"amount": 5.0},
+        cookies={"session": cookie},
+    )
+    assert response.status_code == 400
+    assert "Minimum" in response.json()["detail"]
+
+
+def test_withdraw_no_auth():
+    response = client.post("/account/api/withdraw", json={"amount": 20.0})
+    assert response.status_code == 401

@@ -256,6 +256,12 @@
                 </div>
                 <div class="form-msg" id="billingMsg" style="margin-top:8px;"></div>
             </div>
+            <div class="panel" id="payoutsPanel">
+                <h3>Payouts</h3>
+                <div id="connectStatus">
+                    <p class="no-data">Loading payout status...</p>
+                </div>
+            </div>
             <div class="panel">
                 <h3>Recent Transactions</h3>
                 <table class="data-table">
@@ -445,6 +451,9 @@ async function loadBilling() {
                 <td>$${t.net}</td>
             </tr>
         `).join("");
+
+        // Load Connect/payout status
+        loadConnectStatus();
     } catch {}
 }
 
@@ -468,6 +477,78 @@ async function subscribePro() {
         if (r.checkout_url) window.location.href = r.checkout_url;
     } catch (e) {
         document.getElementById("billingMsg").textContent = "Error: " + (e.message || "Failed to create checkout");
+    }
+}
+
+// --- Connect / Payouts ---
+async function loadConnectStatus() {
+    try {
+        const s = await apiFetch("/account/api/connect-status");
+        const el = document.getElementById("connectStatus");
+        if (!s.connected) {
+            el.innerHTML = `
+                <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+                    Connect your Stripe account to withdraw earnings from your agent sales.
+                    A 3% platform fee applies on withdrawals. Minimum withdrawal: $10.
+                </p>
+                <button class="btn-primary" onclick="connectStripe()">Connect Stripe Account</button>
+                <div class="form-msg" id="connectMsg" style="margin-top:8px"></div>
+            `;
+        } else if (!s.payouts_enabled || !s.details_submitted) {
+            el.innerHTML = `
+                <div class="stat-row"><span class="stat-label">Status</span><span class="stat-value"><span class="badge badge-yellow">Setup Incomplete</span></span></div>
+                <p style="font-size:13px;color:var(--text-muted);margin:12px 0">
+                    Your Stripe account is connected but setup is not complete. Finish onboarding to enable withdrawals.
+                </p>
+                <button class="btn-primary" onclick="connectStripe()">Complete Setup</button>
+                <div class="form-msg" id="connectMsg" style="margin-top:8px"></div>
+            `;
+        } else {
+            el.innerHTML = `
+                <div class="stat-row"><span class="stat-label">Stripe Account</span><span class="stat-value"><span class="badge badge-green">Connected</span></span></div>
+                <div class="stat-row"><span class="stat-label">Payouts</span><span class="stat-value"><span class="badge badge-green">Enabled</span></span></div>
+                <div style="margin-top:16px">
+                    <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:4px">Withdraw from wallet (min $10, 3% fee)</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="number" id="withdrawAmount" min="10" step="1" value="10" style="width:120px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">
+                        <button class="btn-primary" onclick="withdrawFunds()">Withdraw</button>
+                    </div>
+                    <div class="form-msg" id="connectMsg" style="margin-top:8px"></div>
+                </div>
+            `;
+        }
+    } catch {
+        document.getElementById("connectStatus").innerHTML = '<p class="no-data">Could not load payout status.</p>';
+    }
+}
+
+async function connectStripe() {
+    const msgEl = document.getElementById("connectMsg");
+    if (msgEl) msgEl.textContent = "Redirecting to Stripe...";
+    try {
+        const r = await fetch("/account/api/connect-onboard", { method: "POST" });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Failed");
+        if (data.onboarding_url) window.location.href = data.onboarding_url;
+    } catch (e) {
+        if (msgEl) { msgEl.textContent = "Error: " + e.message; msgEl.className = "form-msg error"; }
+    }
+}
+
+async function withdrawFunds() {
+    const amount = parseFloat(document.getElementById("withdrawAmount").value);
+    const msgEl = document.getElementById("connectMsg");
+    if (!amount || amount < 10) { msgEl.textContent = "Minimum withdrawal is $10."; msgEl.className = "form-msg error"; return; }
+    try {
+        const r = await fetch("/account/api/withdraw", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ amount }) });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || "Failed");
+        msgEl.textContent = "Withdrawal successful! $" + data.net_amount.toFixed(2) + " transferred (fee: $" + data.fee.toFixed(2) + "). New balance: $" + data.new_balance.toFixed(2);
+        msgEl.className = "form-msg success";
+        loadBilling(); // refresh KPIs
+    } catch (e) {
+        msgEl.textContent = "Error: " + e.message;
+        msgEl.className = "form-msg error";
     }
 }
 

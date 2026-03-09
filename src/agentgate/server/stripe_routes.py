@@ -1,4 +1,4 @@
-"""Stripe integration — wallet top-up (one-time) + Pro subscription."""
+"""Stripe integration — wallet top-up, Pro subscription, Connect payouts."""
 
 import logging
 
@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import Organization
+from agentgate.db.models import Organization, Transaction
 
 logger = logging.getLogger("agentgate.stripe")
 
@@ -252,3 +252,158 @@ async def _handle_subscription_deleted(subscription_data: dict):
             org.tier = "free"
             await session.commit()
             logger.info("Pro subscription cancelled, downgraded to free: org=%s", org.name)
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — developer payout onboarding + withdrawals
+# ---------------------------------------------------------------------------
+
+WITHDRAWAL_FEE_PCT = settings.stripe_connect_withdrawal_fee_pct  # 0.03 = 3%
+MIN_WITHDRAWAL = settings.stripe_connect_min_withdrawal  # $10
+
+
+async def create_connect_onboarding(org_id: str) -> dict:
+    """Create a Stripe Connect Account Link for onboarding. Returns URL."""
+    _init_stripe()
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        if org.stripe_connect_id:
+            # Already has a Connect account — create a new login link or dashboard link
+            account_link = stripe.AccountLink.create(
+                account=org.stripe_connect_id,
+                refresh_url=f"{settings.base_url}/account?connect=refresh",
+                return_url=f"{settings.base_url}/account?connect=success",
+                type="account_onboarding",
+            )
+            return {"onboarding_url": account_link.url}
+
+        # Create new Express Connect account
+        account = stripe.Account.create(
+            type="express",
+            email=org.email,
+            metadata={"org_id": str(org_id), "org_name": org.name},
+            capabilities={
+                "transfers": {"requested": True},
+            },
+        )
+
+        # Save connect ID
+        org.stripe_connect_id = account.id
+        await session.commit()
+
+    account_link = stripe.AccountLink.create(
+        account=account.id,
+        refresh_url=f"{settings.base_url}/account?connect=refresh",
+        return_url=f"{settings.base_url}/account?connect=success",
+        type="account_onboarding",
+    )
+
+    logger.info("Connect account created: org=%s connect_id=%s", org.name, account.id)
+    return {"onboarding_url": account_link.url, "connect_id": account.id}
+
+
+async def get_connect_status(org_id: str) -> dict:
+    """Get Connect account status for an org."""
+    _init_stripe()
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        if not org.stripe_connect_id:
+            return {"connected": False}
+
+    account = stripe.Account.retrieve(org.stripe_connect_id)
+    return {
+        "connected": True,
+        "connect_id": org.stripe_connect_id,
+        "charges_enabled": account.charges_enabled,
+        "payouts_enabled": account.payouts_enabled,
+        "details_submitted": account.details_submitted,
+    }
+
+
+async def create_withdrawal(org_id: str, amount: float) -> dict:
+    """Withdraw funds from wallet to connected Stripe account via Transfer."""
+    _init_stripe()
+
+    if not isinstance(amount, (int, float)) or amount < MIN_WITHDRAWAL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum withdrawal is ${MIN_WITHDRAWAL:.2f}",
+        )
+
+    fee = round(amount * WITHDRAWAL_FEE_PCT, 4)
+    net = round(amount - fee, 4)
+
+    async with async_session() as session:
+        org = await session.get(Organization, org_id)
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+        if not org.stripe_connect_id:
+            raise HTTPException(
+                status_code=400,
+                detail="No Stripe account connected. Connect your account first.",
+            )
+        if org.balance < amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient balance. You have ${org.balance:.2f}",
+            )
+
+        # Verify Connect account can receive payouts
+        account = stripe.Account.retrieve(org.stripe_connect_id)
+        if not account.payouts_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail="Your Stripe account is not fully set up for payouts.",
+            )
+
+        # Create Stripe Transfer (platform -> connected account)
+        net_cents = int(round(net * 100))
+        transfer = stripe.Transfer.create(
+            amount=net_cents,
+            currency="usd",
+            destination=org.stripe_connect_id,
+            metadata={
+                "org_id": str(org_id),
+                "org_name": org.name,
+                "gross_amount": str(amount),
+                "fee": str(fee),
+            },
+        )
+
+        # Deduct from wallet balance
+        org.balance = round(org.balance - amount, 4)
+
+        # Record withdrawal transaction
+        tx = Transaction(
+            payer_org_id=org.id,
+            receiver_org_id=org.id,
+            agent_id=org.id,  # self-referential for withdrawals
+            agent_name="[withdrawal]",
+            amount=amount,
+            fee=fee,
+            net=net,
+            tx_type="withdrawal",
+        )
+        session.add(tx)
+        await session.commit()
+
+    logger.info(
+        "Withdrawal: org=%s amount=$%.2f fee=$%.4f net=$%.4f transfer=%s",
+        org.name, amount, fee, net, transfer.id,
+    )
+    return {
+        "transfer_id": transfer.id,
+        "gross_amount": amount,
+        "fee": fee,
+        "fee_pct": WITHDRAWAL_FEE_PCT,
+        "net_amount": net,
+        "new_balance": org.balance,
+    }

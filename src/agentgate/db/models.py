@@ -63,6 +63,7 @@ class Organization(Base):
     tier: Mapped[str] = mapped_column(
         String(20), nullable=False, default="free", server_default="free",
     )
+    stripe_connect_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

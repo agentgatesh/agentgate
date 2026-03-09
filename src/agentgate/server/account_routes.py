@@ -293,3 +293,40 @@ async def account_subscribe_pro(request: Request):
     from agentgate.server.stripe_routes import create_pro_checkout
 
     return await create_pro_checkout(str(org.id))
+
+
+# ---------------------------------------------------------------------------
+# Stripe Connect — developer payout
+# ---------------------------------------------------------------------------
+
+
+@router.post("/connect-onboard")
+async def account_connect_onboard(request: Request):
+    """Start Stripe Connect onboarding to receive payouts."""
+    org = await _require_user(request)
+
+    from agentgate.server.stripe_routes import create_connect_onboarding
+
+    return await create_connect_onboarding(str(org.id))
+
+
+@router.get("/connect-status")
+async def account_connect_status(request: Request):
+    """Get the user's Stripe Connect account status."""
+    org = await _require_user(request)
+
+    from agentgate.server.stripe_routes import get_connect_status
+
+    return await get_connect_status(str(org.id))
+
+
+@router.post("/withdraw")
+async def account_withdraw(request: Request):
+    """Withdraw funds from wallet to connected Stripe account."""
+    org = await _require_user(request)
+    body = await request.json()
+    amount = body.get("amount", 0)
+
+    from agentgate.server.stripe_routes import create_withdrawal
+
+    return await create_withdrawal(str(org.id), amount)
