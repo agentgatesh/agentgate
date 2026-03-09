@@ -439,18 +439,18 @@ async function loadBilling() {
         const txBody = document.getElementById("txBody");
         if (!txs.length) {
             txBody.innerHTML = '<tr><td colspan="6" class="no-data">No transactions yet.</td></tr>';
-            return;
+        } else {
+            txBody.innerHTML = txs.map(t => `
+                <tr>
+                    <td>${t.created_at ? t.created_at.substring(0, 19).replace("T", " ") : ""}</td>
+                    <td>${esc(t.agent_name)}</td>
+                    <td><span class="badge ${t.direction === "paid" ? "badge-red" : "badge-green"}">${t.direction}</span></td>
+                    <td>$${t.amount}</td>
+                    <td>$${t.fee}</td>
+                    <td>$${t.net}</td>
+                </tr>
+            `).join("");
         }
-        txBody.innerHTML = txs.map(t => `
-            <tr>
-                <td>${t.created_at ? t.created_at.substring(0, 19).replace("T", " ") : ""}</td>
-                <td>${esc(t.agent_name)}</td>
-                <td><span class="badge ${t.direction === "paid" ? "badge-red" : "badge-green"}">${t.direction}</span></td>
-                <td>$${t.amount}</td>
-                <td>$${t.fee}</td>
-                <td>$${t.net}</td>
-            </tr>
-        `).join("");
 
         // Load Connect/payout status
         loadConnectStatus();
