@@ -330,7 +330,13 @@ checkAuth().then(user => {
         currentUser = user;
         document.getElementById("app").style.display = "flex";
         document.getElementById("sidebarOrgName").textContent = user.org_name;
-        loadDashboard();
+        // Open billing tab if returning from Stripe (connect/topup/upgrade)
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("connect") || params.has("topup") || params.has("upgrade")) {
+            showPage("billing");
+        } else {
+            loadDashboard();
+        }
     } else {
         window.location.href = "/login";
     }
