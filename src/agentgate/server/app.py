@@ -135,9 +135,9 @@ async def health():
     return {"status": "ok", "version": __version__}
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard")
 async def dashboard():
-    return (STATIC_DIR / "dashboard.html").read_text()
+    return RedirectResponse("/account", status_code=302)
 
 
 @app.get("/admin", response_class=HTMLResponse)
@@ -160,9 +160,9 @@ async def signup_page():
     return (STATIC_DIR / "signup.html").read_text()
 
 
-@app.get("/billing", response_class=HTMLResponse)
+@app.get("/billing")
 async def billing_page():
-    return (STATIC_DIR / "billing.html").read_text()
+    return RedirectResponse("/account", status_code=302)
 
 
 @app.get("/login", response_class=HTMLResponse)

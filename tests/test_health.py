@@ -50,12 +50,10 @@ def test_landing_page_seo_meta():
 # ---------------------------------------------------------------------------
 
 
-def test_dashboard_page():
-    response = client.get("/dashboard")
-    assert response.status_code == 200
-    assert "text/html" in response.headers["content-type"]
-    assert "Dashboard" in response.text
-    assert "AgentGate" in response.text
+def test_dashboard_redirects_to_account():
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/account"
 
 
 # ---------------------------------------------------------------------------
@@ -965,9 +963,9 @@ def test_task_log_model():
 # ---------------------------------------------------------------------------
 
 
-def test_landing_page_has_dashboard_link():
+def test_landing_page_has_account_link():
     response = client.get("/")
-    assert "/dashboard" in response.text
+    assert "/account" in response.text
 
 
 def test_landing_page_has_new_features():
@@ -3384,12 +3382,10 @@ def test_pricing_page_has_tiers():
 # ---------------------------------------------------------------------------
 
 
-def test_billing_page():
-    response = client.get("/billing")
-    assert response.status_code == 200
-    assert "text/html" in response.headers["content-type"]
-    assert "Billing" in response.text
-    assert "AgentGate" in response.text
+def test_billing_redirects_to_account():
+    response = client.get("/billing", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/account"
 
 
 # ---------------------------------------------------------------------------
