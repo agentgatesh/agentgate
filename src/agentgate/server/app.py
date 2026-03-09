@@ -2,11 +2,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from agentgate import __version__
 from agentgate.core.config import settings
@@ -27,6 +29,25 @@ from agentgate.server.stripe_routes import router as stripe_router
 from agentgate.server.ucp_routes import router as ucp_router
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+# ---------------------------------------------------------------------------
+# Security headers middleware
+# ---------------------------------------------------------------------------
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if not settings.debug:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        return response
 
 
 @asynccontextmanager
@@ -57,6 +78,18 @@ app = FastAPI(
     description="The unified gateway to deploy, connect, and monetize AI agents.",
     version=__version__,
     lifespan=lifespan,
+)
+
+# Security headers on every response
+app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS — allow SDK clients and third-party integrations
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.base_url],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mount routers at both / (backward compat) and /v1/ (versioned API)

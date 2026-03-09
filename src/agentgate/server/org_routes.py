@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import case, cast, func, select
 from sqlalchemy.types import Date
@@ -22,12 +22,18 @@ router = APIRouter(prefix="/orgs", tags=["organizations"])
 
 
 @router.post("/signup", status_code=201)
-async def signup(data: SignupRequest):
+async def signup(data: SignupRequest, request: Request):
     """Create a new organization with a generated API key. No auth required.
 
     Returns the API key (shown only once — save it!).
     """
     import secrets
+
+    from agentgate.server.ratelimit import auth_limiter
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not auth_limiter.allow(f"signup:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many signup attempts. Try again later.")
 
     async with async_session() as session:
         existing = await session.execute(

@@ -113,6 +113,12 @@ async def get_current_user(request: Request) -> Organization | None:
 
 @router.post("/login")
 async def login(request: Request):
+    from agentgate.server.ratelimit import auth_limiter
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not auth_limiter.allow(f"login:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
     body = await request.json()
     email = body.get("email", "").strip().lower()
     password = body.get("password", "")

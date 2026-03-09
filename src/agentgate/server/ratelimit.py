@@ -75,6 +75,11 @@ class RateLimiter:
             return self._allow_redis(redis_client, key)
         return self._allow_memory(key)
 
+    def reset(self, key: str) -> None:
+        """Remove a key's bucket (useful for testing)."""
+        with self._lock:
+            self._buckets.pop(key, None)
+
     def _allow_redis(self, redis_client, key: str) -> bool:
         try:
             result = redis_client.evalsha(
@@ -100,3 +105,6 @@ class RateLimiter:
 
 
 task_limiter = RateLimiter(rate=10.0, burst=20)
+
+# Stricter limiter for auth endpoints (login, signup) — 5 attempts per 60s
+auth_limiter = RateLimiter(rate=5 / 60, burst=5)

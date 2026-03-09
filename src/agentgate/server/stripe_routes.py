@@ -367,7 +367,10 @@ async def create_withdrawal(org_id: str, amount: float) -> dict:
         # Create Stripe Transfer (platform -> connected account)
         # Use the platform account's default currency (e.g. USD in live, AED in test)
         platform_balance = stripe.Balance.retrieve()
-        platform_currency = platform_balance.available[0].currency if platform_balance.available else "usd"
+        platform_currency = (
+            platform_balance.available[0].currency
+            if platform_balance.available else "usd"
+        )
         net_cents = int(round(net * 100))
         transfer = stripe.Transfer.create(
             amount=net_cents,

@@ -19,6 +19,9 @@ COPY alembic.ini entrypoint.sh ./
 # Install the project itself
 RUN uv sync --frozen --no-dev
 
+RUN useradd -m -u 1000 agentgate && chown -R agentgate:agentgate /app
+USER agentgate
+
 EXPOSE 8000
 
 CMD ["./entrypoint.sh"]

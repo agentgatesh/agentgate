@@ -59,6 +59,12 @@ def _get_admin_user(request: Request) -> str:
 
 @router.post("/login")
 async def admin_login(request: Request):
+    from agentgate.server.ratelimit import auth_limiter
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not auth_limiter.allow(f"admin_login:{client_ip}"):
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
     body = await request.json()
     username = body.get("username", "")
     password = body.get("password", "")
