@@ -223,6 +223,67 @@
             font-size: 15px;
         }
 
+        /* Code examples */
+        .examples {
+            display: grid;
+            gap: 28px;
+        }
+        .example {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .example-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .example-header h3 {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .example-header .lang-tabs {
+            display: flex;
+            gap: 4px;
+        }
+        .example-header .lang-tab {
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-muted);
+            background: transparent;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .example-header .lang-tab.active {
+            color: var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        .example-header .lang-tab:hover:not(.active) {
+            color: var(--text);
+        }
+        .example pre {
+            padding: 18px 20px;
+            font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+            font-size: 13px;
+            line-height: 1.7;
+            overflow-x: auto;
+            margin: 0;
+            display: none;
+        }
+        .example pre.active { display: block; }
+        .example pre .kw { color: #c084fc; }
+        .example pre .str { color: #34d399; }
+        .example pre .cm { color: var(--text-muted); }
+        .example pre .fn { color: #60a5fa; }
+        .example pre .num { color: #fbbf24; }
+
         /* Features */
         .features {
             display: grid;
@@ -437,6 +498,100 @@
         </div>
     </section>
 
+    <section id="examples">
+        <div class="container">
+            <h2>See It in Action</h2>
+            <p class="lead">Real code. No magic. Works in minutes.</p>
+            <div class="examples">
+
+                <div class="example">
+                    <div class="example-header">
+                        <h3>Deploy an agent</h3>
+                        <div class="lang-tabs">
+                            <button class="lang-tab active" onclick="switchTab(this, 'deploy-cli')">CLI</button>
+                        </div>
+                    </div>
+                    <pre id="deploy-cli" class="active"><span class="cm"># One command. Your agent is live with HTTPS.</span>
+<span class="kw">$</span> agentgate deploy ./my-agent --name smart-assistant
+<span class="cm">&#10003; Building Docker image...</span>
+<span class="cm">&#10003; Container running on port 9001</span>
+<span class="cm">&#10003; Agent registered: https://agentgate.sh/agents/smart-assistant/card</span></pre>
+                </div>
+
+                <div class="example">
+                    <div class="example-header">
+                        <h3>Call an agent</h3>
+                        <div class="lang-tabs">
+                            <button class="lang-tab active" onclick="switchTab(this, 'call-py')">Python</button>
+                            <button class="lang-tab" onclick="switchTab(this, 'call-ts')">TypeScript</button>
+                            <button class="lang-tab" onclick="switchTab(this, 'call-curl')">cURL</button>
+                        </div>
+                    </div>
+                    <pre id="call-py" class="active"><span class="kw">from</span> agentgate <span class="kw">import</span> AgentGate
+
+gw = AgentGate(api_key=<span class="str">"ag_..."</span>)
+result = gw.<span class="fn">run_task</span>(<span class="str">"smart-assistant"</span>, {<span class="str">"prompt"</span>: <span class="str">"Summarize this PDF"</span>})
+print(result[<span class="str">"output"</span>])</pre>
+                    <pre id="call-ts"><span class="kw">import</span> { AgentGateClient } <span class="kw">from</span> <span class="str">"agentgatesh"</span>;
+
+<span class="kw">const</span> gw = <span class="kw">new</span> <span class="fn">AgentGateClient</span>({ apiKey: <span class="str">"ag_..."</span> });
+<span class="kw">const</span> result = <span class="kw">await</span> gw.<span class="fn">runTask</span>(<span class="str">"smart-assistant"</span>, { prompt: <span class="str">"Summarize this PDF"</span> });
+console.<span class="fn">log</span>(result.output);</pre>
+                    <pre id="call-curl"><span class="kw">$</span> curl -X POST https://agentgate.sh/agents/smart-assistant/task \
+    -H <span class="str">"Authorization: Bearer ag_..."</span> \
+    -d <span class="str">'{"input": {"prompt": "Summarize this PDF"}}'</span></pre>
+                </div>
+
+                <div class="example">
+                    <div class="example-header">
+                        <h3>Monetize your agent</h3>
+                        <div class="lang-tabs">
+                            <button class="lang-tab active" onclick="switchTab(this, 'price-py')">Python</button>
+                            <button class="lang-tab" onclick="switchTab(this, 'price-ts')">TypeScript</button>
+                        </div>
+                    </div>
+                    <pre id="price-py" class="active"><span class="cm"># Set a price — every call auto-charges the caller</span>
+gw.<span class="fn">update_agent</span>(<span class="str">"smart-assistant"</span>, price_per_task=<span class="num">0.05</span>)
+<span class="cm"># You earn $0.05 per call. We handle billing.</span></pre>
+                    <pre id="price-ts"><span class="cm">// Set a price — every call auto-charges the caller</span>
+<span class="kw">await</span> gw.<span class="fn">updateAgent</span>(<span class="str">"smart-assistant"</span>, { pricePerTask: <span class="num">0.05</span> });
+<span class="cm">// You earn $0.05 per call. We handle billing.</span></pre>
+                </div>
+
+                <div class="example">
+                    <div class="example-header">
+                        <h3>Discover &amp; chain agents</h3>
+                        <div class="lang-tabs">
+                            <button class="lang-tab active" onclick="switchTab(this, 'chain-py')">Python</button>
+                            <button class="lang-tab" onclick="switchTab(this, 'chain-ts')">TypeScript</button>
+                        </div>
+                    </div>
+                    <pre id="chain-py" class="active"><span class="cm"># Find agents by tag, then chain them together</span>
+agents = gw.<span class="fn">search_agents</span>(tags=[<span class="str">"summarizer"</span>])
+print(f<span class="str">"Found {len(agents)} agents"</span>)
+
+<span class="cm"># Pipeline: extract → summarize → translate</span>
+result = gw.<span class="fn">run_chain</span>([
+    {<span class="str">"agent"</span>: <span class="str">"pdf-extractor"</span>,  <span class="str">"input"</span>: {<span class="str">"url"</span>: <span class="str">"https://..."</span>}},
+    {<span class="str">"agent"</span>: <span class="str">"summarizer"</span>,     <span class="str">"input"</span>: {<span class="str">"text"</span>: <span class="str">"{{prev.output}}"</span>}},
+    {<span class="str">"agent"</span>: <span class="str">"translator"</span>,    <span class="str">"input"</span>: {<span class="str">"text"</span>: <span class="str">"{{prev.output}}"</span>, <span class="str">"lang"</span>: <span class="str">"it"</span>}},
+])</pre>
+                    <pre id="chain-ts"><span class="cm">// Find agents by tag, then chain them together</span>
+<span class="kw">const</span> agents = <span class="kw">await</span> gw.<span class="fn">searchAgents</span>({ tags: [<span class="str">"summarizer"</span>] });
+console.<span class="fn">log</span>(<span class="str">`Found ${agents.length} agents`</span>);
+
+<span class="cm">// Pipeline: extract → summarize → translate</span>
+<span class="kw">const</span> result = <span class="kw">await</span> gw.<span class="fn">runChain</span>([
+    { agent: <span class="str">"pdf-extractor"</span>,  input: { url: <span class="str">"https://..."</span> } },
+    { agent: <span class="str">"summarizer"</span>,     input: { text: <span class="str">"{{prev.output}}"</span> } },
+    { agent: <span class="str">"translator"</span>,    input: { text: <span class="str">"{{prev.output}}"</span>, lang: <span class="str">"it"</span> } },
+]);</pre>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
     <section id="use-cases">
         <div class="container">
             <h2>Who Is This For?</h2>
@@ -578,6 +733,15 @@
     </div>
 </footer>
 
+<script>
+function switchTab(btn, preId) {
+    const example = btn.closest('.example');
+    example.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+    example.querySelectorAll('pre').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(preId).classList.add('active');
+}
+</script>
 <script>fetch("/auth/me").then(r=>{if(r.ok){const e=document.getElementById("authLink");if(e){e.href="/account";e.textContent="Account"}}}).catch(()=>{});</script>
 </body>
 </html>
