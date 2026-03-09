@@ -32,6 +32,7 @@ dependencies = [
     "sse-starlette>=2.0.0",
     "docker>=7.0.0",
     "python-multipart>=0.0.9",
+    "stripe>=8.0.0",
 ]
 
 [project.optional-dependencies]

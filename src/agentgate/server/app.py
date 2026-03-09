@@ -23,6 +23,7 @@ from agentgate.server.log_retention import log_retention_loop
 from agentgate.server.metrics import get_metrics
 from agentgate.server.org_routes import router as orgs_router
 from agentgate.server.routes import router as agents_router
+from agentgate.server.stripe_routes import router as stripe_router
 from agentgate.server.ucp_routes import router as ucp_router
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -72,6 +73,7 @@ app.include_router(deploy_router, prefix="/v1")
 app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(account_router)
+app.include_router(stripe_router)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

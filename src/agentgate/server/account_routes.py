@@ -266,3 +266,30 @@ async def account_reset_key(request: Request):
         "message": "API key reset successfully",
         "api_key": new_key,
     }
+
+
+# ---------------------------------------------------------------------------
+# Stripe — wallet top-up & Pro subscription
+# ---------------------------------------------------------------------------
+
+
+@router.post("/topup")
+async def account_topup(request: Request):
+    """Create a Stripe Checkout session for wallet top-up."""
+    org = await _require_user(request)
+    body = await request.json()
+    amount = body.get("amount", 0)
+
+    from agentgate.server.stripe_routes import create_topup_checkout
+
+    return await create_topup_checkout(str(org.id), amount)
+
+
+@router.post("/subscribe-pro")
+async def account_subscribe_pro(request: Request):
+    """Create a Stripe Checkout session for Pro subscription."""
+    org = await _require_user(request)
+
+    from agentgate.server.stripe_routes import create_pro_checkout
+
+    return await create_pro_checkout(str(org.id))

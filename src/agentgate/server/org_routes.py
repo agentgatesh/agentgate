@@ -467,17 +467,16 @@ async def topup_org_wallet(
     body: dict,
     caller_org: Organization | None = Depends(resolve_org_or_admin),
 ):
-    """Add funds to an organization's wallet. Admin or org owner.
+    """Add funds to an organization's wallet via Stripe Checkout.
 
     Body: {"amount": 10.0}
-
-    NOTE: Currently disabled — Stripe integration coming soon.
+    Amount is in USD. Minimum $5. Redirects to Stripe Checkout.
     """
-    raise HTTPException(
-        status_code=503,
-        detail="Coming soon — payment integration in progress. "
-        "Wallet top-up will be available once Stripe is connected.",
-    )
+    amount = body.get("amount", 0)
+
+    from agentgate.server.stripe_routes import create_topup_checkout
+
+    return await create_topup_checkout(str(org_id), amount)
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +494,9 @@ async def change_org_tier(
 
     Body: {"tier": "pro"}
 
-    NOTE: Upgrades to paid tiers currently disabled — Stripe integration coming soon.
+    For upgrades to Pro, use Stripe Checkout via /stripe/create-pro-session
+    or /account/api/subscribe-pro. This endpoint handles the tier change
+    after Stripe confirms payment (or admin override).
     """
     if caller_org and caller_org.id != org_id:
         raise HTTPException(status_code=403, detail="Access denied to this organization")
@@ -505,13 +506,6 @@ async def change_org_tier(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid tier: {new_tier}. Must be one of: {', '.join(TIER_LIMITS.keys())}",
-        )
-
-    # Block upgrades to paid tiers until Stripe is integrated
-    if new_tier in ("pro", "enterprise"):
-        raise HTTPException(
-            status_code=503,
-            detail="Coming soon — paid tiers will be available once Stripe is connected.",
         )
 
     async with async_session() as session:

@@ -242,6 +242,20 @@
             <div class="kpi-grid" id="billingKpi">
                 <div class="kpi-card"><div class="label">Loading...</div><div class="value">-</div></div>
             </div>
+            <div class="panel" id="billingActions">
+                <h3>Wallet & Subscription</h3>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
+                    <div>
+                        <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:4px;">Add funds to wallet (min $5)</label>
+                        <div style="display:flex;gap:8px;">
+                            <input type="number" id="topupAmount" min="5" step="1" value="10" style="width:100px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text);">
+                            <button class="btn-primary" onclick="topupWallet()">Add Funds</button>
+                        </div>
+                    </div>
+                    <div id="upgradeProBtn"></div>
+                </div>
+                <div class="form-msg" id="billingMsg" style="margin-top:8px;"></div>
+            </div>
             <div class="panel">
                 <h3>Recent Transactions</h3>
                 <table class="data-table">
@@ -408,6 +422,14 @@ async function loadBilling() {
             ${kpi("Fees Paid", "$" + b.total_fees_paid, "")}
         `;
 
+        // Show upgrade button if not already Pro
+        const upgradeDiv = document.getElementById("upgradeProBtn");
+        if (b.tier === "free") {
+            upgradeDiv.innerHTML = '<button class="btn-primary" onclick="subscribePro()" style="background:#7c3aed;">Upgrade to Pro — $49/mo</button>';
+        } else if (b.tier === "pro") {
+            upgradeDiv.innerHTML = '<span class="badge badge-green" style="padding:8px 16px;">Pro Active</span>';
+        }
+
         const txBody = document.getElementById("txBody");
         if (!txs.length) {
             txBody.innerHTML = '<tr><td colspan="6" class="no-data">No transactions yet.</td></tr>';
@@ -424,6 +446,29 @@ async function loadBilling() {
             </tr>
         `).join("");
     } catch {}
+}
+
+async function topupWallet() {
+    const amount = parseFloat(document.getElementById("topupAmount").value);
+    if (!amount || amount < 5) {
+        document.getElementById("billingMsg").textContent = "Minimum top-up is $5.";
+        return;
+    }
+    try {
+        const r = await apiFetch("/account/api/topup", { method: "POST", body: JSON.stringify({ amount }) });
+        if (r.checkout_url) window.location.href = r.checkout_url;
+    } catch (e) {
+        document.getElementById("billingMsg").textContent = "Error: " + (e.message || "Failed to create checkout");
+    }
+}
+
+async function subscribePro() {
+    try {
+        const r = await apiFetch("/account/api/subscribe-pro", { method: "POST", body: JSON.stringify({}) });
+        if (r.checkout_url) window.location.href = r.checkout_url;
+    } catch (e) {
+        document.getElementById("billingMsg").textContent = "Error: " + (e.message || "Failed to create checkout");
+    }
 }
 
 // --- Profile ---
