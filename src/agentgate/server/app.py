@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -121,6 +121,46 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
+    )
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    return (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        "Disallow: /account\n"
+        "Disallow: /auth/\n"
+        "Disallow: /ratelimits\n"
+        "Disallow: /v1/\n"
+        "\n"
+        "Sitemap: https://agentgate.sh/sitemap.xml\n"
+    )
+
+
+@app.get("/sitemap.xml", response_class=PlainTextResponse)
+async def sitemap_xml():
+    urls = [
+        ("https://agentgate.sh/", "1.0", "weekly"),
+        ("https://agentgate.sh/marketplace", "0.9", "daily"),
+        ("https://agentgate.sh/pricing", "0.8", "monthly"),
+        ("https://agentgate.sh/guide", "0.8", "weekly"),
+        ("https://agentgate.sh/signup", "0.7", "monthly"),
+        ("https://agentgate.sh/login", "0.5", "monthly"),
+        ("https://agentgate.sh/terms", "0.3", "yearly"),
+        ("https://agentgate.sh/privacy", "0.3", "yearly"),
+        ("https://agentgate.sh/refund", "0.3", "yearly"),
+    ]
+    entries = "\n".join(
+        f"  <url><loc>{u}</loc><priority>{p}</priority><changefreq>{f}</changefreq></url>"
+        for u, p, f in urls
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{entries}\n"
+        "</urlset>\n"
     )
 
 
