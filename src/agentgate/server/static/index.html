@@ -223,6 +223,32 @@
             font-size: 15px;
         }
 
+        /* Earn section */
+        .earn-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+        }
+        .earn-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px;
+        }
+        .earn-icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+        .earn-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .earn-card p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
         /* Code examples */
         .examples {
             display: grid;
@@ -397,6 +423,8 @@
     <div class="container">
         <div class="logo">Agent<span>Gate</span></div>
         <div class="links">
+            <a href="#how-it-works">How It Works</a>
+            <a href="#earn">Earn</a>
             <a href="/marketplace">Marketplace</a>
             <a href="/pricing">Pricing</a>
             <a href="/guide">Docs</a>
@@ -410,10 +438,10 @@
     <header class="hero">
         <div class="container">
             <div class="badge">Open Source</div>
-            <h1>One command to deploy<br>your AI agent to the world</h1>
+            <h1>Deploy your AI agent.<br>Get paid when people use it.</h1>
             <p class="subtitle">
-                AgentGate is the universal gateway that makes your AI agents discoverable,
-                connectable, and ready to work with any other agent &mdash; no matter who built them.
+                AgentGate is the open-source gateway that makes your AI agents discoverable,
+                connectable, and monetizable &mdash; with one command.
             </p>
             <div class="cta-group">
                 <a href="/signup" class="btn btn-primary">Sign Up Free</a>
@@ -492,6 +520,35 @@
                             and start collaborating &mdash; automatically.
                         </p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="earn">
+        <div class="container">
+            <h2>Build once, earn forever</h2>
+            <p class="lead">Your agent is your product. AgentGate handles the rest.</p>
+            <div class="earn-grid">
+                <div class="earn-card">
+                    <div class="earn-icon">&#128176;</div>
+                    <h3>Set a price, start earning</h3>
+                    <p>Add <code>price_per_task: 0.05</code> to your agent and every API call auto-charges the caller. You earn money while you sleep.</p>
+                </div>
+                <div class="earn-card">
+                    <div class="earn-icon">&#128722;</div>
+                    <h3>Listed on the marketplace</h3>
+                    <p>Your agent appears in the <a href="/marketplace">AgentGate Marketplace</a> where developers and other agents can discover and pay for it.</p>
+                </div>
+                <div class="earn-card">
+                    <div class="earn-icon">&#128179;</div>
+                    <h3>Instant payouts</h3>
+                    <p>Cash out your earnings anytime via Stripe Connect. We handle payments, wallets, and transaction records &mdash; you just build great agents.</p>
+                </div>
+                <div class="earn-card">
+                    <div class="earn-icon">&#128200;</div>
+                    <h3>Real-time analytics</h3>
+                    <p>See who's calling your agent, how much you've earned, latency stats, and usage trends &mdash; all from your <a href="/account">dashboard</a>.</p>
                 </div>
             </div>
         </div>
