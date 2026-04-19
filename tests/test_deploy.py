@@ -377,3 +377,57 @@ def test_config_has_deploy_settings():
     assert hasattr(settings, "docker_network")
     assert hasattr(settings, "deploy_port_start")
     assert settings.deploy_port_start == 9100
+
+
+# ---------------------------------------------------------------------------
+# Deployer sidecar — auth contract
+# ---------------------------------------------------------------------------
+
+
+def test_deployer_app_imports():
+    """Deployer entry point is importable."""
+    from agentgate.deployer.main import app
+    assert app is not None
+
+
+def test_deployer_health_requires_no_auth():
+    from fastapi.testclient import TestClient
+
+    from agentgate.deployer.main import app
+
+    c = TestClient(app)
+    r = c.get("/health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+
+
+def test_deployer_rejects_without_secret(monkeypatch):
+    """When DEPLOYER_SECRET is unset, any privileged call returns 503."""
+    monkeypatch.delenv("DEPLOYER_SECRET", raising=False)
+    from fastapi.testclient import TestClient
+
+    from agentgate.deployer.main import app
+
+    c = TestClient(app)
+    r = c.get("/some-id/status", headers={"Authorization": "Bearer anything"})
+    assert r.status_code == 503
+
+
+def test_deployer_rejects_wrong_secret(monkeypatch):
+    monkeypatch.setenv("DEPLOYER_SECRET", "correct-secret")
+    from fastapi.testclient import TestClient
+
+    from agentgate.deployer.main import app
+
+    c = TestClient(app)
+    r = c.get("/some-id/status", headers={"Authorization": "Bearer wrong"})
+    assert r.status_code == 401
+
+
+def test_deploy_client_reexports_expected_methods():
+    from agentgate.server import deploy_client
+
+    assert callable(deploy_client.build_and_run)
+    assert callable(deploy_client.undeploy)
+    assert callable(deploy_client.status)
+    assert callable(deploy_client.logs)

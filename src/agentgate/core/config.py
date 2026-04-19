@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     stripe_pro_price_id: str = ""
     stripe_connect_withdrawal_fee_pct: float = 0.03
     stripe_connect_min_withdrawal: float = 10.0
+    deployer_url: str = "http://deployer:8100"
+    deployer_secret: str = ""
 
 
 settings = Settings()

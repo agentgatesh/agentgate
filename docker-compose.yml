@@ -51,11 +51,26 @@ services:
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:-}
+      DEPLOYER_URL: http://deployer:8100
+      DEPLOYER_SECRET: ${DEPLOYER_SECRET:-changeme}
     ports:
       - "127.0.0.1:8000:8000"
+    # No docker.sock: the api container cannot talk to Docker directly.
+    # All container lifecycle ops go through the deployer sidecar.
+
+  deployer:
+    build: .
+    restart: unless-stopped
+    command: ["uv", "run", "python", "-m", "agentgate.deployer.main"]
+    environment:
+      DEPLOYER_SECRET: ${DEPLOYER_SECRET:-changeme}
+      DEPLOY_DIR: /data/deploys
+      DOCKER_NETWORK: ${DOCKER_NETWORK:-agentgate_default}
+      DEPLOY_PORT_START: "9100"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - deploy_data:/data/deploys
+    # Bound only on the compose network — no host port published.
 
   echo-agent:
     build: examples/echo-agent

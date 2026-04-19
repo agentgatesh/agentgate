@@ -1,4 +1,9 @@
-"""Deploy routes — upload, build, run, and manage agent containers."""
+"""Deploy routes — upload, build, run, and manage agent containers.
+
+This module no longer talks to Docker directly. It proxies to the
+`deployer` sidecar (the only process with /var/run/docker.sock), which
+keeps the attack surface of the main API container minimal.
+"""
 
 import asyncio
 import logging
@@ -10,27 +15,15 @@ from sqlalchemy import select
 
 from agentgate.db.engine import async_session
 from agentgate.db.models import Agent
+from agentgate.server import deploy_client
 from agentgate.server.auth import verify_api_key
-from agentgate.server.deploy_engine import (
-    allocate_port,
-    build_image,
-    cleanup_deploy_files,
-    ensure_dockerfile,
-    get_container_logs,
-    get_container_status,
-    remove_image,
-    run_container,
-    save_agent_files,
-    stop_container,
-)
+from agentgate.server.deploy_engine import allocate_port
 
 logger = logging.getLogger("agentgate.deploy_routes")
 
 router = APIRouter(prefix="/deploy", tags=["deploy"])
 
-# Deploy is sequential (build is expensive anyway). A process-wide lock
-# serialises port allocation + container run so two concurrent deploys
-# never pick the same port.
+# Serialise port allocation so two concurrent deploys never collide.
 _deploy_lock = asyncio.Lock()
 
 
@@ -44,14 +37,14 @@ async def deploy_agent(
 ):
     """Deploy an agent from an uploaded tar.gz archive.
 
-    The archive should contain at minimum an `agent.py` file with a FastAPI app.
-    A Dockerfile is auto-generated if not included.
+    Forwards the archive to the deployer sidecar, which builds and runs
+    the container. The API itself has no docker socket access.
     """
     if not file.filename or not file.filename.endswith(".tar.gz"):
         raise HTTPException(status_code=400, detail="Upload must be a .tar.gz archive")
 
     tar_bytes = await file.read()
-    if len(tar_bytes) > 50 * 1024 * 1024:  # 50 MB limit
+    if len(tar_bytes) > 50 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Archive too large (max 50 MB)")
 
     agent_id = str(uuid.uuid4())
@@ -66,17 +59,12 @@ async def deploy_agent(
         port = allocate_port(existing_ports)
 
         try:
-            agent_dir = save_agent_files(agent_id, tar_bytes)
-            ensure_dockerfile(agent_dir, port)
-            build_image(agent_id, agent_dir)
-            container_id = run_container(agent_id, port)
+            deployer_resp = await deploy_client.build_and_run(agent_id, port, tar_bytes)
         except Exception as exc:
-            stop_container(agent_id)
-            remove_image(agent_id)
-            cleanup_deploy_files(agent_id)
             logger.error("Deploy failed for %s: %s", name, exc)
             raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}")
 
+        container_id = deployer_resp["container_id"]
         container_name = f"agentgate-agent-{agent_id[:12]}"
         internal_url = f"http://{container_name}:{port}"
 
@@ -128,11 +116,11 @@ async def deploy_status(
     if not agent.deployed:
         raise HTTPException(status_code=400, detail="Agent is not a deployed agent")
 
-    status = get_container_status(agent_id)
+    status_data = await deploy_client.status(agent_id)
     return {
         "agent_id": str(agent.id),
         "agent_name": agent.name,
-        **status,
+        **status_data,
     }
 
 
@@ -154,8 +142,8 @@ async def deploy_logs(
     if not agent.deployed:
         raise HTTPException(status_code=400, detail="Agent is not a deployed agent")
 
-    logs = get_container_logs(agent_id, tail=tail)
-    return {"agent_id": str(agent.id), "logs": logs}
+    container_logs = await deploy_client.logs(agent_id, tail=tail)
+    return {"agent_id": str(agent.id), "logs": container_logs}
 
 
 @router.delete("/{agent_id}", status_code=200)
@@ -175,9 +163,11 @@ async def undeploy_agent(
     if not agent.deployed:
         raise HTTPException(status_code=400, detail="Agent is not a deployed agent")
 
-    stop_container(agent_id)
-    remove_image(agent_id)
-    cleanup_deploy_files(agent_id)
+    try:
+        await deploy_client.undeploy(agent_id)
+    except Exception:
+        logger.exception("Deployer undeploy failed for %s", agent_id)
+        # Continue to remove from DB even if sidecar call fails.
 
     async with async_session() as session:
         result = await session.execute(
