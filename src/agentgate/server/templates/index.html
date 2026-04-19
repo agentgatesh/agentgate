@@ -361,6 +361,23 @@
             font-size: 14px;
         }
 
+        /* Demo GIF */
+        #demo { padding: 40px 0; }
+        .demo-wrap {
+            max-width: 920px;
+            margin: 0 auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1e1e2e;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .demo-wrap img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
         /* Payouts section */
         #payouts { padding: 60px 0; border-top: 1px solid var(--border); }
         .payouts-flow {
@@ -578,6 +595,15 @@
             </div>
         </div>
     </header>
+
+    <section id="demo">
+        <div class="container">
+            <p class="lead" style="text-align:center;margin-bottom:20px">See the whole loop in 15 seconds.</p>
+            <div class="demo-wrap">
+                <img src="/static/demo.gif" alt="agentgate deploy demo — install SDK, deploy an agent, call it via curl" width="920" height="520" loading="lazy">
+            </div>
+        </div>
+    </section>
 
     <section id="what-is-agentgate">
         <div class="container">

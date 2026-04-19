@@ -33,7 +33,9 @@ S4=$(curl -sfL --max-time $TIMEOUT \
   echo "tempmail.com"
   echo "throwaway.email"
   echo "dolofan.com"
-} | grep -v '^#' | grep -v '^[[:space:]]*$' | tr '[:upper:]' '[:lower:]' | sort -u > "$TEMP_FILE"
+} | grep -v '^#' | grep -v '^[[:space:]]*$' | tr '[:upper:]' '[:lower:]' | sort -u \
+  | grep -Ev '^(example\.(com|net|org)|test\.com|test|localhost|invalid|example)$' \
+  > "$TEMP_FILE"
 
 COUNT=$(wc -l < "$TEMP_FILE" | tr -d ' ')
 echo "[disposable-list] unique domains: $COUNT"

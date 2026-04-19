@@ -38,6 +38,14 @@ CACHE_TTL_SECONDS = 7 * 24 * 60 * 60  # 7 days
 API_TIMEOUT = 3.0
 API_HOST = "mailcheck.p.rapidapi.com"
 
+# RFC 2606 reserves these for documentation/examples/tests. Some public
+# disposable lists include them anyway; we strip them at runtime so test
+# suites and docs can use them without surprises.
+_RESERVED_DOMAINS: frozenset[str] = frozenset({
+    "example.com", "example.net", "example.org",
+    "test.com", "test", "localhost", "invalid", "example",
+})
+
 # Conservative fallback used only if the bundled list file is missing.
 _FALLBACK_DOMAINS: frozenset[str] = frozenset({
     "mailinator.com", "guerrillamail.com", "tempmail.com", "throwam.com",
@@ -156,6 +164,11 @@ async def is_disposable(email: str) -> bool:
     """
     domain = _domain_of(email)
     if not domain:
+        return False
+
+    # Reserved/test domains never count as disposable even if a noisy
+    # upstream list tagged them.
+    if domain in _RESERVED_DOMAINS:
         return False
 
     if domain in _LOCAL_DOMAINS:
