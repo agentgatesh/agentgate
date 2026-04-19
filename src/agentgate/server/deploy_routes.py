@@ -1,5 +1,6 @@
 """Deploy routes — upload, build, run, and manage agent containers."""
 
+import asyncio
 import logging
 import uuid
 
@@ -27,6 +28,11 @@ logger = logging.getLogger("agentgate.deploy_routes")
 
 router = APIRouter(prefix="/deploy", tags=["deploy"])
 
+# Deploy is sequential (build is expensive anyway). A process-wide lock
+# serialises port allocation + container run so two concurrent deploys
+# never pick the same port.
+_deploy_lock = asyncio.Lock()
+
 
 @router.post("/", status_code=201)
 async def deploy_agent(
@@ -50,48 +56,46 @@ async def deploy_agent(
 
     agent_id = str(uuid.uuid4())
 
-    # Get existing ports to find a free one
-    async with async_session() as session:
-        result = await session.execute(
-            select(Agent.container_port).where(Agent.container_port.isnot(None))
-        )
-        existing_ports = [row[0] for row in result.all()]
+    async with _deploy_lock:
+        async with async_session() as session:
+            result = await session.execute(
+                select(Agent.container_port).where(Agent.container_port.isnot(None))
+            )
+            existing_ports = [row[0] for row in result.all()]
 
-    port = allocate_port(existing_ports)
+        port = allocate_port(existing_ports)
 
-    try:
-        agent_dir = save_agent_files(agent_id, tar_bytes)
-        ensure_dockerfile(agent_dir, port)
-        build_image(agent_id, agent_dir)
-        container_id = run_container(agent_id, port)
-    except Exception as exc:
-        # Cleanup on failure
-        stop_container(agent_id)
-        remove_image(agent_id)
-        cleanup_deploy_files(agent_id)
-        logger.error("Deploy failed for %s: %s", name, exc)
-        raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}")
+        try:
+            agent_dir = save_agent_files(agent_id, tar_bytes)
+            ensure_dockerfile(agent_dir, port)
+            build_image(agent_id, agent_dir)
+            container_id = run_container(agent_id, port)
+        except Exception as exc:
+            stop_container(agent_id)
+            remove_image(agent_id)
+            cleanup_deploy_files(agent_id)
+            logger.error("Deploy failed for %s: %s", name, exc)
+            raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}")
 
-    # Register agent in DB with internal Docker URL
-    container_name = f"agentgate-agent-{agent_id[:12]}"
-    internal_url = f"http://{container_name}:{port}"
+        container_name = f"agentgate-agent-{agent_id[:12]}"
+        internal_url = f"http://{container_name}:{port}"
 
-    async with async_session() as session:
-        agent = Agent(
-            id=uuid.UUID(agent_id),
-            name=name,
-            description=description,
-            url=internal_url,
-            version=version,
-            skills=[],
-            tags=[],
-            deployed=True,
-            container_id=container_id[:12],
-            container_port=port,
-        )
-        session.add(agent)
-        await session.commit()
-        await session.refresh(agent)
+        async with async_session() as session:
+            agent = Agent(
+                id=uuid.UUID(agent_id),
+                name=name,
+                description=description,
+                url=internal_url,
+                version=version,
+                skills=[],
+                tags=[],
+                deployed=True,
+                container_id=container_id[:12],
+                container_port=port,
+            )
+            session.add(agent)
+            await session.commit()
+            await session.refresh(agent)
 
     return {
         "id": str(agent.id),

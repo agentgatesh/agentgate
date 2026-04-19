@@ -8,6 +8,12 @@ from fastapi import APIRouter, HTTPException, Request
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import Organization, Transaction
+from agentgate.server.billing import (
+    credit_wallet,
+    is_event_processed,
+    mark_event_processed,
+    process_withdrawal,
+)
 
 logger = logging.getLogger("agentgate.stripe")
 
@@ -154,10 +160,17 @@ async def stripe_webhook(request: Request):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    event_id = event["id"]
     event_type = event["type"]
     data = event["data"]["object"]
 
-    logger.info("Stripe webhook: %s", event_type)
+    logger.info("Stripe webhook: id=%s type=%s", event_id, event_type)
+
+    # Idempotency: Stripe retries until 2xx, so record the event ID and
+    # skip processing if we've already handled it.
+    if await is_event_processed("stripe", event_id):
+        logger.info("Stripe event %s already processed, skipping", event_id)
+        return {"status": "ok", "duplicate": True}
 
     if event_type == "checkout.session.completed":
         await _handle_checkout_completed(data)
@@ -166,6 +179,7 @@ async def stripe_webhook(request: Request):
     elif event_type == "customer.subscription.deleted":
         await _handle_subscription_deleted(data)
 
+    await mark_event_processed("stripe", event_id, event_type)
     return {"status": "ok"}
 
 
@@ -190,10 +204,8 @@ async def _handle_checkout_completed(session_data: dict):
             if not org:
                 logger.warning("Top-up for unknown org: %s", org_id)
                 return
-            org.balance = round(org.balance + amount_usd, 4)
-            logger.info("Wallet top-up: org=%s amount=$%.2f new_balance=$%.4f",
-                        org.name, amount_usd, org.balance)
-            await session.commit()
+        await credit_wallet(org.id, round(amount_usd, 4))
+        logger.info("Wallet top-up: org=%s amount=$%.2f", org.name, amount_usd)
 
     elif checkout_type == "pro_subscription":
         subscription_id = session_data.get("subscription")
@@ -350,60 +362,65 @@ async def create_withdrawal(org_id: str, amount: float) -> dict:
                 status_code=400,
                 detail="No Stripe account connected. Connect your account first.",
             )
-        if org.balance < amount:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient balance. You have ${org.balance:.2f}",
-            )
 
-        # Verify Connect account can receive payouts
         account = stripe.Account.retrieve(org.stripe_connect_id)
         if not account.payouts_enabled:
             raise HTTPException(
                 status_code=400,
                 detail="Your Stripe account is not fully set up for payouts.",
             )
+        connect_id = org.stripe_connect_id
+        org_name = org.name
 
-        # Create Stripe Transfer (platform -> connected account)
-        # Use the platform account's default currency (e.g. USD in live, AED in test)
-        platform_balance = stripe.Balance.retrieve()
-        platform_currency = (
-            platform_balance.available[0].currency
-            if platform_balance.available else "usd"
-        )
-        net_cents = int(round(net * 100))
+    # Atomic debit — fails with 400 if balance < amount, no partial state.
+    ok, err = await process_withdrawal(org.id, amount, fee, net)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err)
+
+    # Create Stripe Transfer after the wallet debit committed. If Stripe
+    # fails, refund the wallet and bubble up the error.
+    platform_balance = stripe.Balance.retrieve()
+    platform_currency = (
+        platform_balance.available[0].currency
+        if platform_balance.available else "usd"
+    )
+    net_cents = int(round(net * 100))
+    try:
         transfer = stripe.Transfer.create(
             amount=net_cents,
             currency=platform_currency,
-            destination=org.stripe_connect_id,
+            destination=connect_id,
             metadata={
                 "org_id": str(org_id),
-                "org_name": org.name,
+                "org_name": org_name,
                 "gross_amount": str(amount),
                 "fee": str(fee),
             },
         )
+    except Exception as exc:
+        from agentgate.server.billing import credit_wallet as _refund
+        await _refund(org.id, amount)
+        logger.exception("Stripe Transfer failed, refunded wallet")
+        raise HTTPException(status_code=502, detail=f"Stripe transfer failed: {exc}")
 
-        # Deduct from wallet balance
-        org.balance = round(org.balance - amount, 4)
-
-        # Record withdrawal transaction
-        tx = Transaction(
+    async with async_session() as session:
+        session.add(Transaction(
             payer_org_id=org.id,
             receiver_org_id=org.id,
-            agent_id=org.id,  # self-referential for withdrawals
+            agent_id=None,  # withdrawals are org-level, no agent
             agent_name="[withdrawal]",
             amount=amount,
             fee=fee,
             net=net,
             tx_type="withdrawal",
-        )
-        session.add(tx)
+        ))
         await session.commit()
+        org = await session.get(Organization, org_id)
+        new_balance = org.balance if org else 0.0
 
     logger.info(
         "Withdrawal: org=%s amount=$%.2f fee=$%.4f net=$%.4f transfer=%s",
-        org.name, amount, fee, net, transfer.id,
+        org_name, amount, fee, net, transfer.id,
     )
     return {
         "transfer_id": transfer.id,
@@ -411,5 +428,5 @@ async def create_withdrawal(org_id: str, amount: float) -> dict:
         "fee": fee,
         "fee_pct": WITHDRAWAL_FEE_PCT,
         "net_amount": net,
-        "new_balance": org.balance,
+        "new_balance": new_balance,
     }

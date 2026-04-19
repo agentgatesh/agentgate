@@ -2852,15 +2852,31 @@ async def test_process_billing_admin_key():
 
 @pytest.mark.asyncio
 async def test_process_billing_insufficient_funds():
-    """Should reject if org has insufficient balance."""
+    """Atomic debit UPDATE returns rowcount=0 when balance < price."""
     from agentgate.server.routes import _process_billing
+
     agent = MagicMock()
+    agent.id = "agent-id"
+    agent.name = "pricey"
     agent.price_per_task = 10.0
+    agent.org_id = None
+
     org = MagicMock()
+    org.id = "org-id"
+    org.name = "poor-org"
     org.balance = 5.0
-    charged, err = await _process_billing(agent, org, "task-1")
+    org.tier = "free"
+
+    factory, session = _mock_billing_session(rowcount=0, fallback_balance=5.0)
+
+    with patch("agentgate.server.billing.async_session", factory):
+        charged, err = await _process_billing(agent, org, "task-1")
+
     assert charged is False
     assert "Insufficient balance" in err
+    # No further updates, no Transaction row, no commit after a failed debit
+    session.add.assert_not_called()
+    session.commit.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -2954,16 +2970,41 @@ def test_tier_change_invalid_tier():
 # ---------------------------------------------------------------------------
 
 
+def _mock_billing_session(rowcount: int = 1, fallback_balance: float = 0.0):
+    """Build a mock session for billing.process_charge.
+
+    process_charge calls session.execute(update(...)) several times; each
+    execute result needs a .rowcount. If the first debit fails, it then
+    calls session.get() to read a fresh balance for the error message.
+    """
+    exec_result = MagicMock()
+    exec_result.rowcount = rowcount
+
+    fallback_org = MagicMock()
+    fallback_org.balance = fallback_balance
+
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=exec_result)
+    mock_session.get = AsyncMock(return_value=fallback_org)
+
+    mock_ctx = AsyncMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=mock_ctx), mock_session
+
+
 @pytest.mark.asyncio
 async def test_process_billing_success_charges_payer():
-    """Full billing flow: payer charged, transaction recorded."""
+    """Full billing flow: atomic debit succeeds, transaction recorded."""
     from agentgate.server.routes import _process_billing
 
     agent = MagicMock()
     agent.id = "agent-id"
     agent.name = "paid-agent"
     agent.price_per_task = 1.0
-    agent.org_id = None  # No receiver
+    agent.org_id = None
 
     payer_org = MagicMock()
     payer_org.id = "payer-id"
@@ -2971,35 +3012,22 @@ async def test_process_billing_success_charges_payer():
     payer_org.balance = 10.0
     payer_org.tier = "free"
 
-    mock_payer = MagicMock()
-    mock_payer.balance = 10.0
+    factory, session = _mock_billing_session(rowcount=1)
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
-    mock_session.get = AsyncMock(return_value=mock_payer)
-    mock_session.add = MagicMock()
-    mock_session.commit = AsyncMock()
-
-    mock_ctx = AsyncMock()
-    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_ctx.__aexit__ = AsyncMock(return_value=False)
-    mock_factory = MagicMock(return_value=mock_ctx)
-
-    with patch("agentgate.server.routes.async_session", mock_factory):
+    with patch("agentgate.server.billing.async_session", factory):
         charged, err = await _process_billing(agent, payer_org, "task-123")
 
     assert charged is True
     assert err is None
-    # Payer should have been charged
-    assert mock_payer.balance == round(10.0 - 1.0, 4)
-    # Transaction should have been added to session
-    mock_session.add.assert_called_once()
-    mock_session.commit.assert_called_once()
+    # Debit + platform fee credit (no receiver since agent.org_id is None)
+    assert session.execute.await_count == 2
+    session.add.assert_called_once()  # Transaction row inserted
+    session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_process_billing_with_receiver():
-    """Billing flow with agent owner: receiver gets credited (minus fee)."""
+    """Billing with an agent owner: receiver is credited via UPDATE."""
     import uuid
 
     from agentgate.server.routes import _process_billing
@@ -3017,49 +3045,29 @@ async def test_process_billing_with_receiver():
     payer_org.id = payer_id
     payer_org.name = "payer"
     payer_org.balance = 50.0
-    payer_org.tier = "pro"  # 2.5% fee
+    payer_org.tier = "pro"
 
-    mock_payer = MagicMock()
-    mock_payer.balance = 50.0
+    factory, session = _mock_billing_session(rowcount=1)
 
-    mock_receiver = MagicMock()
-    mock_receiver.id = receiver_id
-    mock_receiver.balance = 100.0
-
-    async def mock_get(model, obj_id):
-        if obj_id == payer_id:
-            return mock_payer
-        if obj_id == receiver_id:
-            return mock_receiver
-        return None
-
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
-    mock_session.get = AsyncMock(side_effect=mock_get)
-    mock_session.add = MagicMock()
-    mock_session.commit = AsyncMock()
-
-    mock_ctx = AsyncMock()
-    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_ctx.__aexit__ = AsyncMock(return_value=False)
-    mock_factory = MagicMock(return_value=mock_ctx)
-
-    with patch("agentgate.server.routes.async_session", mock_factory):
+    with patch("agentgate.server.billing.async_session", factory):
         charged, err = await _process_billing(agent, payer_org, "task-456")
 
     assert charged is True
     assert err is None
-    # Payer charged full price
-    assert mock_payer.balance == round(50.0 - 2.0, 4)
-    # Receiver gets net (price minus 2.5% fee)
+    # 3 updates: debit payer, credit receiver, credit platform fee
+    assert session.execute.await_count == 3
+    # Transaction row inserted with correct pro-tier fee
+    tx = session.add.call_args[0][0]
     fee = round(2.0 * 0.025, 6)
-    net = round(2.0 - fee, 6)
-    assert mock_receiver.balance == round(100.0 + net, 4)
+    assert tx.amount == 2.0
+    assert tx.fee == fee
+    assert tx.net == round(2.0 - fee, 6)
+    assert tx.receiver_org_id == receiver_id
 
 
 @pytest.mark.asyncio
 async def test_process_billing_enterprise_fee():
-    """Enterprise tier should have 2% fee."""
+    """Enterprise tier should have 2% fee on the Transaction row."""
     from agentgate.server.routes import _process_billing
 
     agent = MagicMock()
@@ -3074,29 +3082,16 @@ async def test_process_billing_enterprise_fee():
     payer_org.balance = 100.0
     payer_org.tier = "enterprise"
 
-    mock_payer = MagicMock()
-    mock_payer.balance = 100.0
+    factory, session = _mock_billing_session(rowcount=1)
 
-    mock_session = AsyncMock()
-    mock_session.add = MagicMock()
-    mock_session.get = AsyncMock(return_value=mock_payer)
-    mock_session.add = MagicMock()
-    mock_session.commit = AsyncMock()
-
-    mock_ctx = AsyncMock()
-    mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_ctx.__aexit__ = AsyncMock(return_value=False)
-    mock_factory = MagicMock(return_value=mock_ctx)
-
-    with patch("agentgate.server.routes.async_session", mock_factory):
+    with patch("agentgate.server.billing.async_session", factory):
         charged, err = await _process_billing(agent, payer_org, "task-789")
 
     assert charged is True
-    # Verify the transaction was recorded with correct fee
-    tx_call = mock_session.add.call_args[0][0]
-    assert tx_call.amount == 10.0
-    assert tx_call.fee == round(10.0 * 0.02, 6)  # 2% enterprise fee
-    assert tx_call.net == round(10.0 - 10.0 * 0.02, 6)
+    tx = session.add.call_args[0][0]
+    assert tx.amount == 10.0
+    assert tx.fee == round(10.0 * 0.02, 6)
+    assert tx.net == round(10.0 - 10.0 * 0.02, 6)
 
 
 def test_route_task_402_insufficient_balance():

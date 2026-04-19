@@ -14,11 +14,14 @@ logger = logging.getLogger("agentgate.deploy")
 
 DEFAULT_DOCKERFILE = """\
 FROM python:3.12-slim
+RUN groupadd -r agent && useradd -r -g agent -u 1001 -d /app agent
 WORKDIR /app
 COPY requirements.txt* ./
 RUN if [ -f requirements.txt ]; then pip install --no-cache-dir -r requirements.txt; fi
 RUN pip install --no-cache-dir fastapi uvicorn
 COPY . .
+RUN chown -R agent:agent /app
+USER agent
 EXPOSE {port}
 CMD ["uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "{port}"]
 """

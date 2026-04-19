@@ -206,18 +206,25 @@ def test_create_pro_session_no_price_id(mock_settings):
 # ---------------------------------------------------------------------------
 
 
+@patch("agentgate.server.stripe_routes.mark_event_processed", new_callable=AsyncMock)
+@patch("agentgate.server.stripe_routes.is_event_processed", new_callable=AsyncMock)
+@patch("agentgate.server.stripe_routes.credit_wallet", new_callable=AsyncMock)
 @patch("agentgate.server.stripe_routes.settings")
 @patch("agentgate.server.stripe_routes.stripe")
 @patch("agentgate.server.stripe_routes.async_session")
-def test_webhook_topup_completed(mock_db, mock_stripe, mock_settings):
+def test_webhook_topup_completed(
+    mock_db, mock_stripe, mock_settings, mock_credit, mock_is_proc, mock_mark_proc,
+):
     org = _make_fake_org(balance=10.0)
     mock_settings.stripe_webhook_secret = "whsec_test"
     mock_settings.stripe_secret_key = "sk_test_123"
     db_factory, mock_session = _mock_db_returning(org)
     mock_db.side_effect = db_factory.side_effect
     mock_db.return_value = db_factory.return_value
+    mock_is_proc.return_value = False
 
     event_data = {
+        "id": "evt_test_topup_1",
         "type": "checkout.session.completed",
         "data": {
             "object": {
@@ -241,23 +248,28 @@ def test_webhook_topup_completed(mock_db, mock_stripe, mock_settings):
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
-    # Verify balance was updated
-    assert org.balance == 35.0
-    mock_session.commit.assert_called()
+    mock_credit.assert_awaited_once_with(org.id, 25.0)
+    mock_mark_proc.assert_awaited_once()
 
 
+@patch("agentgate.server.stripe_routes.mark_event_processed", new_callable=AsyncMock)
+@patch("agentgate.server.stripe_routes.is_event_processed", new_callable=AsyncMock)
 @patch("agentgate.server.stripe_routes.settings")
 @patch("agentgate.server.stripe_routes.stripe")
 @patch("agentgate.server.stripe_routes.async_session")
-def test_webhook_pro_subscription(mock_db, mock_stripe, mock_settings):
+def test_webhook_pro_subscription(
+    mock_db, mock_stripe, mock_settings, mock_is_proc, mock_mark_proc,
+):
     org = _make_fake_org(tier="free")
     mock_settings.stripe_webhook_secret = "whsec_test"
     mock_settings.stripe_secret_key = "sk_test_123"
     db_factory, mock_session = _mock_db_returning(org)
     mock_db.side_effect = db_factory.side_effect
     mock_db.return_value = db_factory.return_value
+    mock_is_proc.return_value = False
 
     event_data = {
+        "id": "evt_test_pro_1",
         "type": "checkout.session.completed",
         "data": {
             "object": {
@@ -280,20 +292,27 @@ def test_webhook_pro_subscription(mock_db, mock_stripe, mock_settings):
     assert response.status_code == 200
     assert org.tier == "pro"
     mock_session.commit.assert_called()
+    mock_mark_proc.assert_awaited_once()
 
 
+@patch("agentgate.server.stripe_routes.mark_event_processed", new_callable=AsyncMock)
+@patch("agentgate.server.stripe_routes.is_event_processed", new_callable=AsyncMock)
 @patch("agentgate.server.stripe_routes.settings")
 @patch("agentgate.server.stripe_routes.stripe")
 @patch("agentgate.server.stripe_routes.async_session")
-def test_webhook_subscription_deleted(mock_db, mock_stripe, mock_settings):
+def test_webhook_subscription_deleted(
+    mock_db, mock_stripe, mock_settings, mock_is_proc, mock_mark_proc,
+):
     org = _make_fake_org(tier="pro")
     mock_settings.stripe_webhook_secret = "whsec_test"
     mock_settings.stripe_secret_key = "sk_test_123"
     db_factory, mock_session = _mock_db_returning(org)
     mock_db.side_effect = db_factory.side_effect
     mock_db.return_value = db_factory.return_value
+    mock_is_proc.return_value = False
 
     event_data = {
+        "id": "evt_test_sub_del_1",
         "type": "customer.subscription.deleted",
         "data": {
             "object": {
@@ -314,6 +333,7 @@ def test_webhook_subscription_deleted(mock_db, mock_stripe, mock_settings):
     assert response.status_code == 200
     assert org.tier == "free"
     mock_session.commit.assert_called()
+    mock_mark_proc.assert_awaited_once()
 
 
 @patch("agentgate.server.stripe_routes.settings")
@@ -577,19 +597,28 @@ def test_withdraw_success(mock_get_user, mock_db, mock_stripe, mock_settings):
     mock_transfer.id = "tr_test_123"
     mock_stripe.Transfer.create.return_value = mock_transfer
 
+    mock_balance = MagicMock()
+    mock_balance.available = [MagicMock(currency="usd")]
+    mock_stripe.Balance.retrieve.return_value = mock_balance
+
     cookie = _session_cookie(org)
-    response = client.post(
-        "/account/api/withdraw",
-        json={"amount": 20.0},
-        cookies={"session": cookie},
-    )
+    with patch(
+        "agentgate.server.stripe_routes.process_withdrawal",
+        new_callable=AsyncMock,
+    ) as mock_proc:
+        mock_proc.return_value = (True, None)
+        response = client.post(
+            "/account/api/withdraw",
+            json={"amount": 20.0},
+            cookies={"session": cookie},
+        )
     assert response.status_code == 200
     data = response.json()
     assert data["transfer_id"] == "tr_test_123"
     assert data["gross_amount"] == 20.0
     assert data["fee"] == 0.6  # 3% of 20
     assert data["net_amount"] == 19.4
-    assert org.balance == 30.0  # 50 - 20
+    mock_proc.assert_awaited_once()
     mock_session.add.assert_called()
     mock_session.commit.assert_called()
 
@@ -608,12 +637,21 @@ def test_withdraw_insufficient_balance(mock_get_user, mock_db, mock_stripe, mock
     mock_db.side_effect = db_factory.side_effect
     mock_db.return_value = db_factory.return_value
 
+    mock_account = MagicMock()
+    mock_account.payouts_enabled = True
+    mock_stripe.Account.retrieve.return_value = mock_account
+
     cookie = _session_cookie(org)
-    response = client.post(
-        "/account/api/withdraw",
-        json={"amount": 20.0},
-        cookies={"session": cookie},
-    )
+    with patch(
+        "agentgate.server.stripe_routes.process_withdrawal",
+        new_callable=AsyncMock,
+    ) as mock_proc:
+        mock_proc.return_value = (False, "Insufficient balance: 5.0000 < 20.0000")
+        response = client.post(
+            "/account/api/withdraw",
+            json={"amount": 20.0},
+            cookies={"session": cookie},
+        )
     assert response.status_code == 400
     assert "Insufficient" in response.json()["detail"]
 

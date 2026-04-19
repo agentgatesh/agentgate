@@ -21,8 +21,14 @@ from sse_starlette.sse import EventSourceResponse
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import Agent, Organization, Review, TaskLog, Transaction
-from agentgate.server.auth import bearer_scheme, bearer_scheme_optional, hash_api_key
+from agentgate.db.models import Agent, Organization, Review, TaskLog
+from agentgate.server.auth import (
+    bearer_scheme,
+    bearer_scheme_optional,
+    hash_api_key,
+    is_admin_key,
+)
+from agentgate.server.billing import process_charge
 from agentgate.server.healthcheck import get_agent_health
 from agentgate.server.metrics import Timer, record_request
 from agentgate.server.plugins import plugin_manager
@@ -45,7 +51,7 @@ async def verify_api_key_or_org(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> Organization | None:
     """Check admin key or org key. Returns org if org-scoped, None if admin."""
-    if settings.api_key and credentials.credentials == settings.api_key:
+    if is_admin_key(credentials.credentials, settings.api_key):
         return None  # Admin
     # Try org key
     key_hash = hash_api_key(credentials.credentials)
@@ -568,7 +574,11 @@ async def review_stats(agent_id: uuid.UUID):
     }
 
 
-TIER_FEE_PCT = {"free": 0.03, "pro": 0.025, "enterprise": 0.02}
+# Billing logic lives in agentgate.server.billing (atomic debit +
+# double-entry ledger). Kept here only as a thin wrapper to minimise churn
+# at call sites.
+
+from agentgate.server.billing import TIER_FEE_PCT  # noqa: E402,F401  (re-export)
 
 
 async def _process_billing(
@@ -576,62 +586,7 @@ async def _process_billing(
     payer_org: Organization | None,
     task_id_str: str | None,
 ):
-    """Process billing for a paid agent task.
-
-    - Deducts agent.price_per_task from payer org balance
-    - Credits agent owner org (minus fee)
-    - Records a Transaction in the ledger
-    - Returns (charged, error_msg) — error_msg is set if insufficient funds
-    """
-    if agent.price_per_task <= 0:
-        return True, None  # Free agent, nothing to charge
-
-    if not payer_org:
-        return True, None  # Admin key, no billing
-
-    if payer_org.balance < agent.price_per_task:
-        return False, (
-            f"Insufficient balance: {payer_org.balance:.4f} < "
-            f"{agent.price_per_task:.4f} (agent: {agent.name})"
-        )
-
-    fee_pct = TIER_FEE_PCT.get(payer_org.tier, 0.03)
-    fee = round(agent.price_per_task * fee_pct, 6)
-    net = round(agent.price_per_task - fee, 6)
-
-    async with async_session() as session:
-        # Deduct from payer
-        payer = await session.get(Organization, payer_org.id)
-        payer.balance = round(payer.balance - agent.price_per_task, 4)
-
-        # Credit agent owner (if different from payer)
-        receiver_org_id = None
-        if agent.org_id and agent.org_id != payer_org.id:
-            receiver = await session.get(Organization, agent.org_id)
-            if receiver:
-                receiver.balance = round(receiver.balance + net, 4)
-                receiver_org_id = receiver.id
-
-        # Record transaction
-        tx = Transaction(
-            payer_org_id=payer_org.id,
-            receiver_org_id=receiver_org_id,
-            agent_id=agent.id,
-            agent_name=agent.name,
-            amount=agent.price_per_task,
-            fee=fee,
-            net=net,
-            tx_type="task",
-            task_id=task_id_str,
-        )
-        session.add(tx)
-        await session.commit()
-
-    logger.info(
-        "Billing: org %s charged %.4f for %s (fee: %.4f, net: %.4f)",
-        payer_org.name, agent.price_per_task, agent.name, fee, net,
-    )
-    return True, None
+    return await process_charge(agent, payer_org, task_id_str)
 
 
 async def _fire_webhook(

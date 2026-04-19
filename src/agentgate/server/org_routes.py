@@ -84,16 +84,20 @@ async def _get_org_by_key(session, credentials: HTTPAuthorizationCredentials) ->
 
 def _is_admin_key(credentials: HTTPAuthorizationCredentials) -> bool:
     """Check if the provided credentials match the global admin API key."""
-    return bool(settings.api_key and credentials.credentials == settings.api_key)
+    from agentgate.server.auth import is_admin_key
+
+    return is_admin_key(credentials.credentials, settings.api_key)
 
 
 async def verify_admin_key(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
     """Verify admin API key. Used for org management endpoints."""
+    from agentgate.server.auth import is_admin_key
+
     if not settings.api_key:
         raise HTTPException(status_code=500, detail="API key not configured on server")
-    if credentials.credentials != settings.api_key:
+    if not is_admin_key(credentials.credentials, settings.api_key):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 

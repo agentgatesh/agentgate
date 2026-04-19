@@ -17,6 +17,7 @@ from agentgate.db.models import Agent
 from agentgate.server.account_routes import router as account_router
 from agentgate.server.admin_routes import router as admin_router
 from agentgate.server.auth import bearer_scheme_optional as bearer_scheme
+from agentgate.server.auth import is_admin_key
 from agentgate.server.auth_routes import router as auth_router
 from agentgate.server.chain_routes import router as chains_router
 from agentgate.server.deploy_routes import router as deploy_router
@@ -255,7 +256,7 @@ async def agents_health():
 @app.get("/v1/metrics")
 async def metrics(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
     if settings.api_key:
-        if not credentials or credentials.credentials != settings.api_key:
+        if not credentials or not is_admin_key(credentials.credentials, settings.api_key):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return get_metrics()
 
@@ -267,7 +268,7 @@ async def ratelimits_data(
 ):
     """Get rate limit config and current state for all orgs."""
     if settings.api_key:
-        if not credentials or credentials.credentials != settings.api_key:
+        if not credentials or not is_admin_key(credentials.credentials, settings.api_key):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     from agentgate.db.models import Organization
@@ -301,7 +302,7 @@ async def ratelimits_data(
 async def plugins_info(credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme)):
     """Get info about loaded plugins."""
     if settings.api_key:
-        if not credentials or credentials.credentials != settings.api_key:
+        if not credentials or not is_admin_key(credentials.credentials, settings.api_key):
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
     from agentgate.server.plugins import plugin_manager
