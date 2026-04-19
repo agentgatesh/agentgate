@@ -103,10 +103,43 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="AgentGate",
-    description="The unified gateway to deploy, connect, and monetize AI agents.",
+    title="AgentGate API",
+    summary="Deploy, connect, and monetize AI agents via A2A + MCP + UCP.",
+    description=(
+        "Public REST API for the AgentGate gateway.\n\n"
+        "- **Register** an agent, **call** it, **chain** multiple agents "
+        "into a pipeline\n"
+        "- **Monetize** paid agents with atomic wallet billing + "
+        "Stripe Connect payouts\n"
+        "- **Discover** agents via full-text search, tags, and "
+        "A2A Agent Cards at `/.well-known/agent.json`\n\n"
+        "**Auth:** `Authorization: Bearer <your-api-key>` (get yours "
+        "at [agentgate.sh/signup](https://agentgate.sh/signup)).\n\n"
+        "**Versioning:** all resources are also available under `/v1/*`. "
+        "Unprefixed paths (e.g. `/agents`) are deprecated — follow the "
+        "`Link: rel=\"successor-version\"` header to the `/v1` twin.\n\n"
+        "**SDKs:** Python (`pip install agentgatesh`), TypeScript "
+        "(`npm install agentgatesh`), CLI (`agentgate --help`)."
+    ),
     version=__version__,
     lifespan=lifespan,
+    contact={
+        "name": "AgentGate",
+        "url": "https://agentgate.sh",
+        "email": "info@agentgate.sh",
+    },
+    license_info={
+        "name": "AGPL-3.0-or-later",
+        "url": "https://www.gnu.org/licenses/agpl-3.0.txt",
+    },
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    swagger_ui_parameters={
+        "defaultModelsExpandDepth": -1,  # hide schemas section by default
+        "persistAuthorization": True,
+        "tryItOutEnabled": True,
+    },
 )
 
 # Security headers on every response
@@ -145,17 +178,41 @@ app.include_router(stripe_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _wants_html(request: Request) -> bool:
+    return "text/html" in request.headers.get("accept", "")
+
+
 @app.exception_handler(StarletteHTTPException)
 async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
-    if exc.status_code == 404:
-        accept = request.headers.get("accept", "")
-        if "text/html" in accept:
-            return templates.TemplateResponse(
-                request, "404.html", status_code=404,
-            )
+    if exc.status_code == 404 and _wants_html(request):
+        return templates.TemplateResponse(request, "404.html", status_code=404)
+    # 5xx pages — browser clients get the friendly HTML shell, API
+    # clients (SDKs, curl) keep the JSON contract they rely on.
+    if exc.status_code >= 500 and _wants_html(request):
+        return templates.TemplateResponse(
+            request, "500.html", status_code=exc.status_code,
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all for truly unhandled errors — log them and return either
+    our custom 500 page (browser) or a stable JSON error (SDK clients).
+    Never leak stack traces to the response."""
+    import logging
+
+    logging.getLogger("agentgate").exception(
+        "Unhandled exception on %s %s", request.method, request.url.path,
+    )
+    if _wants_html(request):
+        return templates.TemplateResponse(request, "500.html", status_code=500)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
     )
 
 
@@ -230,9 +287,16 @@ for _p in _PAGES[1:]:  # skip "index" already mounted at "/"
         _page_route(f"{_p}.html", f"/{_p}")
 
 
-@app.api_route("/health", methods=["GET", "HEAD"])
-@app.api_route("/v1/health", methods=["GET", "HEAD"])
+@app.api_route("/health", methods=["GET", "HEAD"], operation_id="health")
 async def health():
+    return {"status": "ok", "version": __version__}
+
+
+@app.api_route(
+    "/v1/health", methods=["GET", "HEAD"],
+    operation_id="health_v1", include_in_schema=False,
+)
+async def health_v1():
     return {"status": "ok", "version": __version__}
 
 

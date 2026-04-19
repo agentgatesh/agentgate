@@ -213,3 +213,35 @@ def test_signup_rejects_disposable_generic_message():
     )
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid email"
+
+
+# ---------------------------------------------------------------------------
+# Graceful error pages + public API docs
+# ---------------------------------------------------------------------------
+
+
+def test_openapi_is_public_and_branded():
+    """/openapi.json must be reachable without auth and carry our copy."""
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["info"]["title"] == "AgentGate API"
+    assert data["info"]["contact"]["email"] == "info@agentgate.sh"
+    assert data["info"]["license"]["name"].startswith("AGPL")
+
+
+def test_swagger_ui_is_public():
+    r = client.get("/docs")
+    assert r.status_code == 200
+    assert "swagger" in r.text.lower()
+
+
+def test_500_html_page_exists():
+    from pathlib import Path
+
+    tmpl = (
+        Path(__file__).parent.parent
+        / "src/agentgate/server/templates/500.html"
+    )
+    assert tmpl.exists()
+    assert "Something went wrong" in tmpl.read_text()

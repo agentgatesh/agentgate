@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <title>Something went wrong — AgentGate</title>
+    <meta name="description" content="We hit a snag on our end. Our monitors have picked it up and we're on it.">
+    <meta name="robots" content="noindex, nofollow">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0a; --surface: #141414; --border: #222;
+            --text: #e5e5e5; --text-muted: #888;
+            --accent: #3b82f6; --accent-hover: #60a5fa;
+            --red: #ef4444;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text);
+            min-height: 100vh; display: flex; flex-direction: column;
+            -webkit-font-smoothing: antialiased;
+        }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { color: var(--accent-hover); }
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+        nav { border-bottom: 1px solid var(--border); padding: 16px 0; }
+        nav .container { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 20px; font-weight: 700; color: var(--text); }
+        .logo span { color: var(--accent); }
+        nav .links { display: flex; gap: 24px; font-size: 14px; }
+        nav .links a { color: var(--text-muted); }
+        nav .links a:hover { color: var(--text); }
+
+        .content {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            padding: 48px 24px; text-align: center;
+        }
+        .error-block { max-width: 520px; }
+        .code {
+            font-size: 72px; font-weight: 700; line-height: 1;
+            color: var(--red); letter-spacing: -2px; margin-bottom: 16px;
+        }
+        h1 { font-size: 26px; margin-bottom: 12px; }
+        .lead { color: var(--text-muted); font-size: 16px; line-height: 1.6; margin-bottom: 28px; }
+        .actions {
+            display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+        }
+        .btn {
+            padding: 11px 20px; border-radius: 8px; font-weight: 600;
+            font-size: 15px; border: 1px solid var(--border);
+            background: var(--surface); color: var(--text);
+            cursor: pointer;
+        }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); color: #fff; }
+        .btn:hover { border-color: var(--accent); color: var(--text); }
+
+        .meta {
+            margin-top: 32px; font-size: 13px; color: var(--text-muted);
+            padding-top: 20px; border-top: 1px solid var(--border);
+        }
+        .meta code {
+            background: var(--surface); padding: 2px 6px; border-radius: 4px;
+            font-size: 12px; color: var(--text);
+        }
+
+        footer {
+            border-top: 1px solid var(--border); padding: 24px 0;
+            text-align: center; color: var(--text-muted); font-size: 14px;
+        }
+        footer a { color: var(--text-muted); }
+        footer a:hover { color: var(--text); }
+    </style>
+</head>
+<body>
+<nav>
+    <div class="container">
+        <a href="/" class="logo">Agent<span>Gate</span></a>
+        <div class="links">
+            <a href="/marketplace">Marketplace</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/guide">Docs</a>
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+        </div>
+    </div>
+</nav>
+<div class="content">
+    <div class="error-block">
+        <div class="code">500</div>
+        <h1>Something went wrong on our end</h1>
+        <p class="lead">
+            This one's on us, not you. Our monitors picked it up and we're on it.
+            Try again in a minute &mdash; most of these clear up on their own.
+        </p>
+        <div class="actions">
+            <button class="btn btn-primary" onclick="window.location.reload()">Try again</button>
+            <a href="/" class="btn">Back to home</a>
+            <a href="https://github.com/agentgatesh/agentgate/issues" class="btn">Report it</a>
+        </div>
+        <div class="meta">
+            If this keeps happening, drop us a note at
+            <a href="mailto:info@agentgate.sh">info@agentgate.sh</a> with
+            the time and what you were doing.
+        </div>
+    </div>
+</div>
+<footer>
+    <div class="container">
+        <p>
+            AgentGate &mdash;
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/guide">Docs</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/terms">Terms</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/privacy">Privacy</a>
+        </p>
+    </div>
+</footer>
+</body>
+</html>
