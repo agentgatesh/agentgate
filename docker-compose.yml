@@ -53,6 +53,8 @@ services:
       STRIPE_PRO_PRICE_ID: ${STRIPE_PRO_PRICE_ID:-}
       DEPLOYER_URL: http://deployer:8100
       DEPLOYER_SECRET: ${DEPLOYER_SECRET:-changeme}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-AgentGate <noreply@agentgate.sh>}
     ports:
       - "127.0.0.1:8000:8000"
     # No docker.sock: the api container cannot talk to Docker directly.
