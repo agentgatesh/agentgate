@@ -54,6 +54,27 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
+    """Mark legacy non-versioned API paths as deprecated.
+
+    Adds RFC-8594-style headers on responses for paths that have a /v1/
+    twin so SDK / CLI clients can surface the upgrade path without us
+    having to break existing integrations with a 308.
+    """
+
+    LEGACY_PREFIXES = ("/agents", "/orgs", "/chains", "/ucp", "/deploy")
+    SUNSET = "Sat, 31 Jan 2026 23:59:59 GMT"
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith(self.LEGACY_PREFIXES) and not path.startswith("/v1/"):
+            response.headers["Deprecation"] = "true"
+            response.headers["Sunset"] = self.SUNSET
+            response.headers["Link"] = f'</v1{path}>; rel="successor-version"'
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
@@ -86,6 +107,9 @@ app = FastAPI(
 
 # Security headers on every response
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Mark legacy non-/v1 API responses as deprecated (no redirect, header-only)
+app.add_middleware(DeprecationHeaderMiddleware)
 
 # CORS — allow SDK clients and third-party integrations
 app.add_middleware(

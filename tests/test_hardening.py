@@ -42,6 +42,34 @@ def test_security_headers_on_api_endpoints():
 
 
 # ---------------------------------------------------------------------------
+# API deprecation header — legacy /agents etc. vs /v1/agents
+# ---------------------------------------------------------------------------
+
+
+def test_legacy_api_path_has_deprecation_header():
+    # /deploy/... requires auth so it returns 401 without DB access, but
+    # the middleware still runs and stamps the deprecation header.
+    response = client.get("/deploy/missing/status")
+    assert response.headers.get("Deprecation") == "true"
+    assert response.headers.get("Sunset")
+    link = response.headers.get("Link", "")
+    assert "/v1/deploy/" in link
+    assert 'rel="successor-version"' in link
+
+
+def test_v1_api_path_has_no_deprecation_header():
+    response = client.get("/v1/deploy/missing/status")
+    assert "Deprecation" not in response.headers
+
+
+def test_non_api_path_has_no_deprecation_header():
+    response = client.get("/health")
+    assert "Deprecation" not in response.headers
+    response = client.get("/")
+    assert "Deprecation" not in response.headers
+
+
+# ---------------------------------------------------------------------------
 # CORS
 # ---------------------------------------------------------------------------
 
