@@ -15,21 +15,43 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import case, cast, desc, func, select
-from sqlalchemy.types import Date
+from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
-from agentgate.core.config import settings
+# settings is re-imported for backwards-compat with tests that patch
+# `agentgate.server.routes.settings`. The runtime code no longer reads
+# settings directly from this module.
+from agentgate.core.config import settings  # noqa: F401
 from agentgate.db.engine import async_session
-from agentgate.db.models import Agent, Organization, Review, TaskLog
+from agentgate.db.models import Agent, Organization
+from agentgate.server.agent_logs import (  # noqa: F401 (re-export)
+    agent_health,
+    get_agent_logs,
+    get_agent_usage,
+    get_agent_usage_breakdown,
+)
+from agentgate.server.agent_logs import router as _logs_router
+from agentgate.server.agent_reviews import (  # noqa: F401 (re-export)
+    create_review,
+    list_reviews,
+    review_stats,
+)
+from agentgate.server.agent_reviews import router as _reviews_router
+from agentgate.server.agent_search import (  # noqa: F401 (re-export)
+    get_agent_latest,
+    get_agent_versions,
+    list_tags,
+    search_agents,
+)
+from agentgate.server.agent_search import router as _search_router
 from agentgate.server.auth import (
-    bearer_scheme,
+    bearer_scheme,  # noqa: F401 (re-export for tests/imports)
     bearer_scheme_optional,
     hash_api_key,
-    is_admin_key,
+    is_admin_key,  # noqa: F401 (re-export)
 )
 from agentgate.server.billing import process_charge
-from agentgate.server.healthcheck import get_agent_health
+from agentgate.server.deps import verify_api_key_or_org  # noqa: F401 (re-export)
 from agentgate.server.metrics import Timer, record_request
 from agentgate.server.plugins import plugin_manager
 from agentgate.server.ratelimit import RateLimiter, task_limiter
@@ -38,31 +60,18 @@ from agentgate.server.schemas import (
     AgentCreate,
     AgentResponse,
     AgentUpdate,
-    ReviewCreate,
-    ReviewResponse,
 )
+from agentgate.server.task_runner import fire_webhook, save_task_log
 
 logger = logging.getLogger("agentgate.routing")
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
-
-async def verify_api_key_or_org(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-) -> Organization | None:
-    """Check admin key or org key. Returns org if org-scoped, None if admin."""
-    if is_admin_key(credentials.credentials, settings.api_key):
-        return None  # Admin
-    # Try org key
-    key_hash = hash_api_key(credentials.credentials)
-    async with async_session() as session:
-        result = await session.execute(
-            select(Organization).where(Organization.api_key_hash == key_hash)
-        )
-        org = result.scalar_one_or_none()
-        if org:
-            return org
-    raise HTTPException(status_code=401, detail="Invalid API key")
+# Sub-routers registered before dynamic /{agent_id} routes so path matching
+# resolves "/tags", "/search", "/by-name/*" before the catch-all UUID route.
+router.include_router(_search_router)
+router.include_router(_reviews_router)
+router.include_router(_logs_router)
 
 
 @router.post("/", response_model=AgentResponse, status_code=201)
@@ -119,165 +128,6 @@ async def list_agents(
         return agents
 
 
-@router.get("/tags")
-async def list_tags():
-    """List all unique tags across all agents."""
-    async with async_session() as session:
-        result = await session.execute(select(Agent).order_by(Agent.created_at.desc()))
-        agents = result.scalars().all()
-    tags: dict[str, int] = {}
-    for agent in agents:
-        for t in agent.tags or []:
-            tags[t] = tags.get(t, 0) + 1
-    return {"tags": [{"name": k, "count": v} for k, v in sorted(tags.items())]}
-
-
-@router.get("/search")
-async def search_agents(
-    q: str | None = Query(default=None, description="Full-text search query"),
-    tags: str | None = Query(default=None, description="Comma-separated tags (AND logic)"),
-    skill: str | None = Query(default=None, description="Filter by skill id or name"),
-    sort: str | None = Query(default="newest", pattern="^(newest|name|version|rating)$"),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-):
-    """Advanced agent search with full-text, multi-tag, and sorting.
-
-    - q: search name, description, skills, and tags
-    - tags: comma-separated list (all must match)
-    - skill: filter by skill id or name
-    - sort: newest (default), name, version, rating
-    """
-    async with async_session() as session:
-        query = select(Agent).order_by(Agent.created_at.desc())
-        result = await session.execute(query)
-        agents = list(result.scalars().all())
-
-        # Fetch review stats for all agents
-        review_result = await session.execute(
-            select(
-                Review.agent_id,
-                func.count(Review.id).label("review_count"),
-                func.avg(Review.rating).label("avg_rating"),
-            ).group_by(Review.agent_id)
-        )
-        review_stats = {
-            row.agent_id: {
-                "review_count": row.review_count,
-                "avg_rating": round(float(row.avg_rating), 2),
-            }
-            for row in review_result.all()
-        }
-
-    # Full-text search across name, description, skills, tags
-    if q:
-        q_lower = q.lower()
-        agents = [
-            a for a in agents
-            if q_lower in a.name.lower()
-            or q_lower in (a.description or "").lower()
-            or any(
-                q_lower in s.get("id", "").lower()
-                or q_lower in s.get("name", "").lower()
-                or q_lower in s.get("description", "").lower()
-                for s in (a.skills or [])
-            )
-            or any(q_lower in t.lower() for t in (a.tags or []))
-        ]
-
-    # Multi-tag filter (AND logic)
-    if tags:
-        required_tags = [t.strip().lower() for t in tags.split(",") if t.strip()]
-        agents = [
-            a for a in agents
-            if all(
-                any(rt == t.lower() for t in (a.tags or []))
-                for rt in required_tags
-            )
-        ]
-
-    # Skill filter
-    if skill:
-        skill_lower = skill.lower()
-        agents = [
-            a for a in agents
-            if any(
-                skill_lower in s.get("id", "").lower()
-                or skill_lower in s.get("name", "").lower()
-                for s in (a.skills or [])
-            )
-        ]
-
-    # Sorting
-    if sort == "name":
-        agents.sort(key=lambda a: a.name.lower())
-    elif sort == "version":
-        agents.sort(key=lambda a: a.version, reverse=True)
-    elif sort == "rating":
-        agents.sort(
-            key=lambda a: review_stats.get(a.id, {}).get("avg_rating", 0),
-            reverse=True,
-        )
-
-    total = len(agents)
-    agents = agents[offset:offset + limit]
-
-    return {
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "agents": [
-            {
-                "id": str(a.id),
-                "name": a.name,
-                "description": a.description,
-                "url": a.url,
-                "version": a.version,
-                "skills": a.skills,
-                "tags": a.tags or [],
-                "org_id": str(a.org_id) if a.org_id else None,
-                "avg_rating": review_stats.get(a.id, {}).get("avg_rating"),
-                "review_count": review_stats.get(a.id, {}).get("review_count", 0),
-                "created_at": a.created_at.isoformat(),
-                "updated_at": a.updated_at.isoformat(),
-            }
-            for a in agents
-        ],
-    }
-
-
-@router.get("/by-name/{name}", response_model=list[AgentResponse])
-async def get_agent_versions(
-    name: str,
-    version: str | None = Query(default=None),
-):
-    """Get all versions of an agent by name. Optionally filter by version."""
-    async with async_session() as session:
-        query = select(Agent).where(Agent.name == name).order_by(Agent.created_at.desc())
-        if version:
-            query = select(Agent).where(
-                Agent.name == name, Agent.version == version,
-            ).order_by(Agent.created_at.desc())
-        result = await session.execute(query)
-        agents = result.scalars().all()
-        if not agents:
-            raise HTTPException(status_code=404, detail="No agents found with this name")
-        return agents
-
-
-@router.get("/by-name/{name}/latest", response_model=AgentResponse)
-async def get_agent_latest(name: str):
-    """Get the latest version of an agent by name (most recently created)."""
-    async with async_session() as session:
-        result = await session.execute(
-            select(Agent).where(Agent.name == name).order_by(Agent.created_at.desc()).limit(1)
-        )
-        agent = result.scalar_one_or_none()
-        if not agent:
-            raise HTTPException(status_code=404, detail="No agent found with this name")
-        return agent
-
-
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(agent_id: uuid.UUID):
     async with async_session() as session:
@@ -329,18 +179,6 @@ async def delete_agent(
         await session.commit()
 
 
-@router.get("/{agent_id}/health")
-async def agent_health(agent_id: uuid.UUID):
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-    health = get_agent_health(str(agent_id))
-    if not health:
-        return {"agent": agent.name, "status": "unknown", "message": "No health check yet"}
-    return {"agent": agent.name, **health}
-
-
 @router.get("/{agent_id}/card")
 async def get_agent_card(agent_id: uuid.UUID):
     async with async_session() as session:
@@ -370,210 +208,6 @@ async def get_agent_card(agent_id: uuid.UUID):
         return card
 
 
-@router.get("/{agent_id}/logs")
-async def get_agent_logs(
-    agent_id: uuid.UUID,
-    caller_org: Organization | None = Depends(verify_api_key_or_org),
-    limit: int = Query(default=50, le=200),
-    offset: int = Query(default=0, ge=0),
-):
-    """Get invocation logs for an agent. Requires API key (admin or org)."""
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        if caller_org and agent.org_id != caller_org.id:
-            raise HTTPException(status_code=403, detail="Access denied to this agent")
-        query = (
-            select(TaskLog)
-            .where(TaskLog.agent_id == agent_id)
-            .order_by(desc(TaskLog.created_at))
-            .offset(offset)
-            .limit(limit)
-        )
-        result = await session.execute(query)
-        logs = result.scalars().all()
-    return [
-        {
-            "id": str(log.id),
-            "agent_id": str(log.agent_id),
-            "agent_name": log.agent_name,
-            "caller_ip": log.caller_ip,
-            "task_id": log.task_id,
-            "status": log.status,
-            "error_detail": log.error_detail,
-            "latency_ms": round(log.latency_ms, 1),
-            "created_at": log.created_at.isoformat(),
-        }
-        for log in logs
-    ]
-
-
-@router.get("/{agent_id}/usage")
-async def get_agent_usage(
-    agent_id: uuid.UUID,
-    caller_org: Organization | None = Depends(verify_api_key_or_org),
-):
-    """Get usage stats for an agent. Requires API key (admin or org)."""
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        if caller_org and agent.org_id != caller_org.id:
-            raise HTTPException(status_code=403, detail="Access denied to this agent")
-        result = await session.execute(
-            select(
-                func.count(TaskLog.id).label("total_invocations"),
-                func.count(TaskLog.id).filter(TaskLog.status == "error").label("total_errors"),
-                func.avg(TaskLog.latency_ms).label("avg_latency_ms"),
-                func.max(TaskLog.created_at).label("last_invocation"),
-            ).where(TaskLog.agent_id == agent_id)
-        )
-        row = result.one()
-    return {
-        "agent_id": str(agent_id),
-        "agent_name": agent.name,
-        "total_invocations": row.total_invocations,
-        "total_errors": row.total_errors,
-        "avg_latency_ms": round(row.avg_latency_ms, 1) if row.avg_latency_ms else 0,
-        "last_invocation": row.last_invocation.isoformat() if row.last_invocation else None,
-    }
-
-
-@router.get("/{agent_id}/usage/breakdown")
-async def get_agent_usage_breakdown(
-    agent_id: uuid.UUID,
-    caller_org: Organization | None = Depends(verify_api_key_or_org),
-    period: str = Query(default="day", pattern="^(day|month)$"),
-    days: int = Query(default=30, ge=1, le=365),
-):
-    """Get usage breakdown by day or month. Requires API key (admin or org)."""
-    from datetime import datetime, timedelta, timezone
-
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        if caller_org and agent.org_id != caller_org.id:
-            raise HTTPException(status_code=403, detail="Access denied to this agent")
-
-        since = datetime.now(timezone.utc) - timedelta(days=days)
-
-        if period == "day":
-            date_col = cast(TaskLog.created_at, Date).label("period")
-        else:
-            date_col = func.date_trunc("month", TaskLog.created_at).label("period")
-
-        query = (
-            select(
-                date_col,
-                func.count(TaskLog.id).label("invocations"),
-                func.count(
-                    case((TaskLog.status == "error", TaskLog.id))
-                ).label("errors"),
-                func.avg(TaskLog.latency_ms).label("avg_latency_ms"),
-            )
-            .where(TaskLog.agent_id == agent_id, TaskLog.created_at >= since)
-            .group_by("period")
-            .order_by("period")
-        )
-        result = await session.execute(query)
-        rows = result.all()
-
-    return {
-        "agent_id": str(agent_id),
-        "agent_name": agent.name,
-        "period": period,
-        "days": days,
-        "breakdown": [
-            {
-                "period": (
-                    row.period.isoformat()
-                    if hasattr(row.period, "isoformat") else str(row.period)
-                ),
-                "invocations": row.invocations,
-                "errors": row.errors,
-                "avg_latency_ms": round(row.avg_latency_ms, 1) if row.avg_latency_ms else 0,
-            }
-            for row in rows
-        ],
-    }
-
-
-@router.post("/{agent_id}/reviews", response_model=ReviewResponse, status_code=201)
-async def create_review(agent_id: uuid.UUID, data: ReviewCreate):
-    """Submit a review for an agent (1-5 stars). No auth required."""
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        review = Review(
-            agent_id=agent_id,
-            rating=data.rating,
-            comment=data.comment,
-            reviewer=data.reviewer,
-        )
-        session.add(review)
-        await session.commit()
-        await session.refresh(review)
-        return review
-
-
-@router.get("/{agent_id}/reviews", response_model=list[ReviewResponse])
-async def list_reviews(
-    agent_id: uuid.UUID,
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-):
-    """Get reviews for an agent, newest first."""
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        result = await session.execute(
-            select(Review)
-            .where(Review.agent_id == agent_id)
-            .order_by(desc(Review.created_at))
-            .offset(offset)
-            .limit(limit)
-        )
-        return result.scalars().all()
-
-
-@router.get("/{agent_id}/reviews/stats")
-async def review_stats(agent_id: uuid.UUID):
-    """Get aggregate review stats for an agent."""
-    async with async_session() as session:
-        agent = await session.get(Agent, agent_id)
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        result = await session.execute(
-            select(
-                func.count(Review.id).label("review_count"),
-                func.avg(Review.rating).label("avg_rating"),
-                func.count(Review.id).filter(Review.rating == 5).label("five_star"),
-                func.count(Review.id).filter(Review.rating == 4).label("four_star"),
-                func.count(Review.id).filter(Review.rating == 3).label("three_star"),
-                func.count(Review.id).filter(Review.rating == 2).label("two_star"),
-                func.count(Review.id).filter(Review.rating == 1).label("one_star"),
-            ).where(Review.agent_id == agent_id)
-        )
-        row = result.one()
-    return {
-        "agent_id": str(agent_id),
-        "agent_name": agent.name,
-        "review_count": row.review_count,
-        "avg_rating": round(row.avg_rating, 2) if row.avg_rating else None,
-        "distribution": {
-            "5": row.five_star,
-            "4": row.four_star,
-            "3": row.three_star,
-            "2": row.two_star,
-            "1": row.one_star,
-        },
-    }
-
-
 # Billing logic lives in agentgate.server.billing (atomic debit +
 # double-entry ledger). Kept here only as a thin wrapper to minimise churn
 # at call sites.
@@ -589,57 +223,12 @@ async def _process_billing(
     return await process_charge(agent, payer_org, task_id_str)
 
 
-async def _fire_webhook(
-    webhook_url: str, payload: dict, max_retries: int = 3,
-):
-    """Fire webhook with exponential backoff retry."""
-    for attempt in range(max_retries):
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(webhook_url, json=payload)
-            if resp.status_code < 500:
-                logger.info("Webhook sent to %s (attempt %d)", webhook_url, attempt + 1)
-                return
-            logger.warning(
-                "Webhook %s returned %d (attempt %d/%d)",
-                webhook_url, resp.status_code, attempt + 1, max_retries,
-            )
-        except Exception:
-            logger.warning(
-                "Webhook failed for %s (attempt %d/%d)",
-                webhook_url, attempt + 1, max_retries,
-            )
-        if attempt < max_retries - 1:
-            delay = 2 ** attempt  # 1s, 2s, 4s
-            await asyncio.sleep(delay)
-    logger.error("Webhook exhausted retries for %s", webhook_url)
+# Thin wrappers so existing call sites keep the `_` prefix (and tests
+# patching `agentgate.server.routes._save_task_log` / `_fire_webhook`
+# still resolve).
 
-
-async def _save_task_log(
-    agent_id: uuid.UUID,
-    agent_name: str,
-    caller_ip: str,
-    task_id: str | None,
-    status: str,
-    latency_ms: float,
-    error_detail: str | None = None,
-):
-    """Save a task invocation log to the database."""
-    try:
-        async with async_session() as session:
-            log = TaskLog(
-                agent_id=agent_id,
-                agent_name=agent_name,
-                caller_ip=caller_ip,
-                task_id=task_id,
-                status=status,
-                latency_ms=latency_ms,
-                error_detail=error_detail,
-            )
-            session.add(log)
-            await session.commit()
-    except Exception:
-        logger.warning("Failed to save task log for %s", agent_name)
+_fire_webhook = fire_webhook
+_save_task_log = save_task_log
 
 
 @router.post("/{agent_id}/task")
