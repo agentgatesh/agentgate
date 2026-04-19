@@ -1449,7 +1449,7 @@ async def test_webhook_retry_on_failure():
 
     call_count = 0
 
-    async def mock_post(url, json=None):
+    async def mock_post(url, content=None, headers=None, **kw):
         nonlocal call_count
         call_count += 1
         if call_count < 3:
@@ -1461,8 +1461,8 @@ async def test_webhook_retry_on_failure():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("agentgate.server.routes.httpx.AsyncClient", return_value=mock_client):
-        with patch("agentgate.server.routes.asyncio.sleep", new_callable=AsyncMock):
+    with patch("agentgate.server.task_runner.httpx.AsyncClient", return_value=mock_client):
+        with patch("agentgate.server.task_runner.asyncio.sleep", new_callable=AsyncMock):
             await _fire_webhook("http://example.com/hook", {"event": "test"})
 
     assert call_count == 3
@@ -1481,7 +1481,7 @@ async def test_webhook_retry_success_first_try():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("agentgate.server.routes.httpx.AsyncClient", return_value=mock_client):
+    with patch("agentgate.server.task_runner.httpx.AsyncClient", return_value=mock_client):
         await _fire_webhook("http://example.com/hook", {"event": "test"})
 
     mock_client.post.assert_called_once()
@@ -1497,8 +1497,8 @@ async def test_webhook_retry_exhausted():
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("agentgate.server.routes.httpx.AsyncClient", return_value=mock_client):
-        with patch("agentgate.server.routes.asyncio.sleep", new_callable=AsyncMock):
+    with patch("agentgate.server.task_runner.httpx.AsyncClient", return_value=mock_client):
+        with patch("agentgate.server.task_runner.asyncio.sleep", new_callable=AsyncMock):
             await _fire_webhook("http://example.com/hook", {"event": "test"}, max_retries=3)
 
     assert mock_client.post.call_count == 3

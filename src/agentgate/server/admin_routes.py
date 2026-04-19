@@ -59,16 +59,20 @@ def _get_admin_user(request: Request) -> str:
 
 @router.post("/login")
 async def admin_login(request: Request):
-    from agentgate.server.ratelimit import auth_limiter
+    from agentgate.server.ratelimit import admin_login_limiter
 
     client_ip = request.client.host if request.client else "unknown"
-    if not auth_limiter.allow(f"admin_login:{client_ip}"):
+    if not admin_login_limiter.allow(f"admin_login:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
 
     body = await request.json()
     username = body.get("username", "")
     password = body.get("password", "")
-    if username != settings.admin_username or password != settings.admin_password:
+    # Timing-safe compare on both fields (username could be guessed from a
+    # public endpoint listing orgs; the pair needs constant-time compare).
+    user_ok = hmac.compare_digest(username, settings.admin_username or "")
+    pass_ok = hmac.compare_digest(password, settings.admin_password or "")
+    if not (user_ok and pass_ok):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     return {"token": _make_token(username)}
 

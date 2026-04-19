@@ -108,3 +108,9 @@ task_limiter = RateLimiter(rate=10.0, burst=20)
 
 # Stricter limiter for auth endpoints (login, signup) — 5 attempts per 60s
 auth_limiter = RateLimiter(rate=5 / 60, burst=5)
+
+# Even stricter for admin panel login — 3 attempts per 5 minutes.
+# Admin is a small surface (single username) and brute-force on it is a
+# high-value target, so we accept the friction of locking out a sloppy
+# typer for a few minutes.
+admin_login_limiter = RateLimiter(rate=3 / 300, burst=3)

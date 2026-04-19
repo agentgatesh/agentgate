@@ -300,6 +300,10 @@
         <h1>Account created</h1>
         <p class="subtitle" id="successSubtitle"></p>
 
+        <div class="warning" id="verifyNotice" style="display:none;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:#60a5fa">
+            We sent a verification link to your email. Click it to finish activating your account.
+        </div>
+
         <div class="warning">Save your API key now — it will not be shown again.</div>
 
         <div class="api-key-box">
@@ -379,6 +383,9 @@
                 'Organization "' + data.org_name + '" is ready.';
             document.getElementById('apiKeyValue').textContent = data.api_key;
             document.getElementById('keyPlaceholder').textContent = data.api_key;
+            if (data.email_verification_required) {
+                document.getElementById('verifyNotice').style.display = 'block';
+            }
         } catch (e) {
             errEl.textContent = e.message;
             errEl.style.display = 'block';

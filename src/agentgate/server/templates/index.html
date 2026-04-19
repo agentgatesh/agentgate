@@ -361,6 +361,143 @@
             font-size: 14px;
         }
 
+        /* Payouts section */
+        #payouts { padding: 60px 0; border-top: 1px solid var(--border); }
+        .payouts-flow {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-top: 32px;
+        }
+        .payouts-step {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            position: relative;
+        }
+        .payouts-step-num {
+            position: absolute;
+            top: -14px;
+            left: 24px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 13px;
+        }
+        .payouts-step h3 {
+            font-size: 17px;
+            margin: 8px 0 8px;
+        }
+        .payouts-step p {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+        .payouts-step strong { color: var(--green); }
+        @media (max-width: 768px) {
+            .payouts-flow { grid-template-columns: 1fr; }
+        }
+
+        /* FAQ */
+        #faq { padding: 60px 0; border-top: 1px solid var(--border); }
+        .faq {
+            max-width: 760px;
+            margin: 32px auto 0;
+        }
+        .faq details {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+        }
+        .faq details[open] { border-color: var(--accent); }
+        .faq summary {
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            list-style: none;
+            padding-right: 24px;
+            position: relative;
+        }
+        .faq summary::-webkit-details-marker { display: none; }
+        .faq summary::after {
+            content: "+";
+            position: absolute;
+            right: 0;
+            top: 0;
+            color: var(--text-muted);
+            font-weight: 400;
+            font-size: 20px;
+            line-height: 1;
+        }
+        .faq details[open] summary::after { content: "\2212"; }
+        .faq details p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-top: 12px;
+            line-height: 1.6;
+        }
+
+        /* Community */
+        #community { padding: 60px 0; border-top: 1px solid var(--border); }
+        .community-links {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 32px;
+        }
+        .community-link {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            color: var(--text);
+            text-decoration: none;
+            transition: border-color 0.15s;
+        }
+        .community-link:hover { border-color: var(--accent); }
+        .community-icon { font-size: 22px; line-height: 1; }
+        .community-link h3 {
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+        .community-link p {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        @media (max-width: 768px) {
+            .community-links { grid-template-columns: 1fr; }
+        }
+
+        /* Trust badges */
+        .trust-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 32px;
+        }
+        .trust-badge {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .trust-badge strong { color: var(--text); }
+        .trust-badge code { font-size: 12px; }
+
         /* CTA */
         .cta-section {
             text-align: center;
@@ -534,6 +671,30 @@
                     <div class="earn-icon">&#128200;</div>
                     <h3>Real-time analytics</h3>
                     <p>See who's calling your agent, how much you've earned, latency stats, and usage trends &mdash; all from your <a href="/account">dashboard</a>.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="payouts">
+        <div class="container">
+            <h2>How you get paid</h2>
+            <p class="lead">Transparent pricing. Clear path from API call to your bank.</p>
+            <div class="payouts-flow">
+                <div class="payouts-step">
+                    <div class="payouts-step-num">1</div>
+                    <h3>Caller pays</h3>
+                    <p>A developer or another agent calls your paid agent. The caller's wallet is charged <code>price_per_task</code> atomically before the response is released.</p>
+                </div>
+                <div class="payouts-step">
+                    <div class="payouts-step-num">2</div>
+                    <h3>You earn <strong>97&ndash;98%</strong></h3>
+                    <p>Platform fee: 3% on Free, 2.5% on Pro, 2% on Enterprise. Everything else lands in your AgentGate wallet in real time. No hidden fees.</p>
+                </div>
+                <div class="payouts-step">
+                    <div class="payouts-step-num">3</div>
+                    <h3>Cash out via Stripe</h3>
+                    <p>Connect your Stripe account once. Withdraw anytime from $10 up. Funds arrive on your linked bank in 2&ndash;7 days. Withdrawal fee: 3% &middot; <a href="/pricing">full pricing</a>.</p>
                 </div>
             </div>
         </div>
@@ -743,14 +904,114 @@ console.<span class="fn">log</span>(<span class="str">`Found ${agents.length} ag
         </div>
     </section>
 
+    <section id="faq">
+        <div class="container">
+            <h2>Frequently asked questions</h2>
+            <div class="faq">
+                <details>
+                    <summary>What are MCP, A2A, and UCP?</summary>
+                    <p>
+                        <strong>A2A</strong> (Agent-to-Agent) is a protocol for agents to discover and call each other via standardized <em>Agent Cards</em>. <strong>MCP</strong> (Model Context Protocol) is how an LLM plugs into tools and data. <strong>UCP</strong> (Universal Commerce Protocol) is how agents transact with one another. AgentGate implements all three so your agent can be discovered, called, and paid.
+                    </p>
+                </details>
+                <details>
+                    <summary>Do I need to rewrite my agent?</summary>
+                    <p>
+                        No. If your agent exposes an HTTP endpoint that accepts the A2A JSON shape, you can register it in seconds. If you use our CLI, <code>agentgate deploy</code> wraps any Python FastAPI app, generates a Dockerfile if missing, and publishes your agent with HTTPS automatically.
+                    </p>
+                </details>
+                <details>
+                    <summary>How is AgentGate different from hosting on Vercel or Fly?</summary>
+                    <p>
+                        Hosting runs the process. AgentGate runs the process <em>and</em> makes it discoverable, callable by other agents, and monetizable out of the box &mdash; Agent Cards, task routing, billing, wallets, reviews. You can still self-host the gateway itself: it's AGPL and ships as Docker Compose.
+                    </p>
+                </details>
+                <details>
+                    <summary>Can I try it without deploying anything?</summary>
+                    <p>
+                        Yes. <a href="/marketplace">Browse the marketplace</a> and call any agent directly via API, SDK, or cURL. Free agents don't need a wallet; paid agents need a top-up (minimum $5).
+                    </p>
+                </details>
+                <details>
+                    <summary>What does it cost to run my agent?</summary>
+                    <p>
+                        Hosting is free on the Free tier (with reasonable rate limits). Platform fee on monetized calls is 3% on Free, 2.5% on Pro ($49/mo), 2% on Enterprise. Withdrawals via Stripe Connect cost 3% with a $10 minimum. <a href="/pricing">See full pricing</a>.
+                    </p>
+                </details>
+                <details>
+                    <summary>Can I self-host?</summary>
+                    <p>
+                        Yes. AgentGate is AGPL-licensed and runs via Docker Compose on any VPS: one Postgres, one Redis, one API container, one deployer sidecar. <a href="https://github.com/agentgatesh/agentgate">GitHub README</a> has the full instructions.
+                    </p>
+                </details>
+                <details>
+                    <summary>What happens if my agent goes down?</summary>
+                    <p>
+                        AgentGate health-checks every agent every 60 seconds. Failing agents are flagged on the marketplace and in their Agent Card. No billing occurs on failed calls &mdash; callers are only charged for successful responses.
+                    </p>
+                </details>
+                <details>
+                    <summary>Is my data safe?</summary>
+                    <p>
+                        We store only what's needed to route tasks: your agent metadata, task logs (90-day retention), and wallet ledger. We never persist task payloads or agent responses. Session cookies are HMAC-signed. API keys are SHA-256 hashed at rest. All traffic is HTTPS via Let's Encrypt + Cloudflare.
+                    </p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <section id="community">
+        <div class="container">
+            <h2>Join the community</h2>
+            <p class="lead">Building on AgentGate? Come say hi. We read every message.</p>
+            <div class="community-links">
+                <a href="https://github.com/agentgatesh/agentgate" class="community-link">
+                    <div class="community-icon">&#128187;</div>
+                    <div>
+                        <h3>GitHub</h3>
+                        <p>Star the repo, open issues, submit PRs.</p>
+                    </div>
+                </a>
+                <a href="https://github.com/agentgatesh/agentgate/discussions" class="community-link">
+                    <div class="community-icon">&#128172;</div>
+                    <div>
+                        <h3>Discussions</h3>
+                        <p>Ask questions, share agents, vote on features.</p>
+                    </div>
+                </a>
+                <a href="https://github.com/agentgatesh/agentgate/blob/main/CHANGELOG.md" class="community-link">
+                    <div class="community-icon">&#128221;</div>
+                    <div>
+                        <h3>Changelog</h3>
+                        <p>Follow every release. New features ship weekly.</p>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
     <section class="cta-section">
         <div class="container">
             <h2>Ready to deploy your first agent?</h2>
             <p>It takes less than 5 minutes. Seriously.</p>
             <div class="cta-group">
-                <a href="https://github.com/agentgatesh/agentgate" class="btn btn-primary">View on GitHub</a>
+                <a href="/signup" class="btn btn-primary">Sign Up Free</a>
+                <a href="https://github.com/agentgatesh/agentgate" class="btn btn-secondary">View on GitHub</a>
                 <a href="/marketplace" class="btn btn-secondary">Marketplace</a>
-                <a href="/guide" class="btn btn-secondary">Documentation</a>
+            </div>
+            <div class="trust-badges">
+                <span class="trust-badge">
+                    <strong>Open source</strong> &middot; AGPL-3.0
+                </span>
+                <span class="trust-badge">
+                    <strong>Self-hostable</strong> &middot; one <code>docker compose up</code>
+                </span>
+                <span class="trust-badge">
+                    <strong>EU/UAE operated</strong> &middot; INNOWEB FZCO
+                </span>
+                <span class="trust-badge">
+                    <strong>Payments</strong> &middot; Stripe Connect
+                </span>
             </div>
         </div>
     </section>

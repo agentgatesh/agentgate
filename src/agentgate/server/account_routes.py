@@ -252,6 +252,12 @@ async def account_change_password(request: Request):
 
 @router.post("/reset-key")
 async def account_reset_key(request: Request):
+    """Force-reset the API key immediately (old key invalid NOW).
+
+    Use `/rotate-key` instead for a grace-period rotation that keeps the
+    old key valid for a while so you can update integrations without
+    downtime.
+    """
     org = await _require_user(request)
 
     new_key = secrets.token_urlsafe(32)
@@ -266,6 +272,52 @@ async def account_reset_key(request: Request):
         "message": "API key reset successfully",
         "api_key": new_key,
     }
+
+
+@router.post("/rotate-key")
+async def account_rotate_key(request: Request):
+    """Create a new primary key; keep the old one as secondary (grace period).
+
+    The old key remains valid and can still authenticate. Call
+    `/finalize-rotation` once all integrations use the new key to
+    invalidate the old one.
+    """
+    org = await _require_user(request)
+
+    new_key = secrets.token_urlsafe(32)
+
+    async with async_session() as session:
+        db_org = await session.get(Organization, org.id)
+        # Move current primary hash into secondary slot (grace window).
+        db_org.secondary_api_key_hash = db_org.api_key_hash
+        db_org.api_key_hash = hash_api_key(new_key)
+        await session.commit()
+
+    return {
+        "message": (
+            "API key rotated. The previous key still works until you "
+            "call /finalize-rotation."
+        ),
+        "api_key": new_key,
+    }
+
+
+@router.post("/finalize-rotation")
+async def account_finalize_rotation(request: Request):
+    """Invalidate the old (secondary) key. Call once the new key is live
+    everywhere."""
+    org = await _require_user(request)
+
+    async with async_session() as session:
+        db_org = await session.get(Organization, org.id)
+        if not db_org.secondary_api_key_hash:
+            raise HTTPException(
+                status_code=400, detail="No pending rotation to finalize",
+            )
+        db_org.secondary_api_key_hash = None
+        await session.commit()
+
+    return {"message": "Old API key invalidated"}
 
 
 # ---------------------------------------------------------------------------

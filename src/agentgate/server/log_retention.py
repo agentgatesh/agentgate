@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, select
 
 from agentgate.core.config import settings
 from agentgate.db.engine import async_session
-from agentgate.db.models import TaskLog
+from agentgate.db.models import RevokedSession, TaskLog
 
 logger = logging.getLogger("agentgate.log_retention")
 
@@ -52,12 +52,20 @@ async def cleanup_old_logs():
                     )
                     cap_deleted += result.rowcount
 
+            # 3) Purge revoked-session rows whose exp has already passed:
+            # nothing to revoke once the token can no longer validate.
+            rev_cutoff = datetime.now(timezone.utc)
+            result = await session.execute(
+                delete(RevokedSession).where(RevokedSession.exp < rev_cutoff)
+            )
+            revoked_deleted = result.rowcount
+
             await session.commit()
 
-            if ttl_deleted or cap_deleted:
+            if ttl_deleted or cap_deleted or revoked_deleted:
                 logger.info(
-                    "Log cleanup: %d TTL-expired, %d over-cap deleted",
-                    ttl_deleted, cap_deleted,
+                    "Log cleanup: %d TTL-expired, %d over-cap, %d expired revocations",
+                    ttl_deleted, cap_deleted, revoked_deleted,
                 )
     except Exception:
         logger.warning("Log cleanup failed", exc_info=True)

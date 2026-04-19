@@ -68,6 +68,46 @@ class Organization(Base):
         String(20), nullable=False, default="free", server_default="free",
     )
     stripe_connect_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class EmailVerificationToken(Base):
+    """Single-use tokens sent to users to confirm their email address."""
+
+    __tablename__ = "email_verification_tokens"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class PasswordResetToken(Base):
+    """Single-use tokens for the password-reset flow."""
+
+    __tablename__ = "password_reset_tokens"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -142,6 +182,23 @@ class TaskLog(Base):
     __table_args__ = (
         Index("ix_task_logs_agent_id", "agent_id"),
         Index("ix_task_logs_created_at", "created_at"),
+    )
+
+
+class RevokedSession(Base):
+    """Session tokens that have been explicitly logged out.
+
+    Stores a SHA-256 hash of the token payload (not the full token) so
+    that a DB leak never compromises live sessions. Rows are pruned by
+    the log retention loop once their original `exp` passes.
+    """
+
+    __tablename__ = "revoked_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    exp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 

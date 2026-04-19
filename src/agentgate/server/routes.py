@@ -62,6 +62,7 @@ from agentgate.server.schemas import (
     AgentUpdate,
 )
 from agentgate.server.task_runner import fire_webhook, save_task_log
+from agentgate.server.url_validation import UnsafeURLError, validate_url
 
 logger = logging.getLogger("agentgate.routing")
 
@@ -79,6 +80,16 @@ async def register_agent(
     data: AgentCreate,
     caller_org: Organization | None = Depends(verify_api_key_or_org),
 ):
+    # SSRF guard: user-supplied url / webhook_url cannot point at private
+    # IPs, loopback, or cloud metadata endpoints. Internal deployed-agent
+    # URLs are populated by deploy_routes.py, not this handler.
+    try:
+        validate_url(data.url)
+        if data.webhook_url:
+            validate_url(data.webhook_url)
+    except UnsafeURLError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid URL: {exc}")
+
     # If org key is used, force org_id to the caller's org
     org_id = caller_org.id if caller_org else data.org_id
     async with async_session() as session:
@@ -143,6 +154,15 @@ async def update_agent(
     data: AgentUpdate,
     caller_org: Organization | None = Depends(verify_api_key_or_org),
 ):
+    # SSRF guard on any user-supplied URL change.
+    try:
+        if data.url is not None:
+            validate_url(data.url)
+        if data.webhook_url is not None and data.webhook_url != "":
+            validate_url(data.webhook_url)
+    except UnsafeURLError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid URL: {exc}")
+
     async with async_session() as session:
         agent = await session.get(Agent, agent_id)
         if not agent:
@@ -277,7 +297,10 @@ async def route_task(
         key_hash = hash_api_key(credentials.credentials)
         async with async_session() as session:
             result = await session.execute(
-                select(Organization).where(Organization.api_key_hash == key_hash)
+                select(Organization).where(
+                    (Organization.api_key_hash == key_hash)
+                    | (Organization.secondary_api_key_hash == key_hash)
+                )
             )
             caller_org_for_billing = result.scalar_one_or_none()
 
@@ -459,7 +482,10 @@ async def route_task_stream(
         key_hash = hash_api_key(credentials.credentials)
         async with async_session() as session:
             result = await session.execute(
-                select(Organization).where(Organization.api_key_hash == key_hash)
+                select(Organization).where(
+                    (Organization.api_key_hash == key_hash)
+                    | (Organization.secondary_api_key_hash == key_hash)
+                )
             )
             caller_org_for_billing = result.scalar_one_or_none()
 
@@ -604,7 +630,10 @@ async def route_task_ws(websocket: WebSocket, agent_id: uuid.UUID):
                     key_hash = hash_api_key(auth_token)
                     async with async_session() as session:
                         result = await session.execute(
-                            select(Organization).where(Organization.api_key_hash == key_hash)
+                            select(Organization).where(
+                    (Organization.api_key_hash == key_hash)
+                    | (Organization.secondary_api_key_hash == key_hash)
+                )
                         )
                         caller_org_for_billing = result.scalar_one_or_none()
                 await websocket.send_json({"type": "status", "data": "Authenticated"})

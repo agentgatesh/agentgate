@@ -8,15 +8,31 @@ HTTP concerns and the test suite's existing mocks of
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import logging
+import time
 import uuid
 
 import httpx
 
+from agentgate.core.config import settings
 from agentgate.db.engine import async_session
 from agentgate.db.models import TaskLog
 
 logger = logging.getLogger("agentgate.task_runner")
+
+
+def _sign_webhook(payload_bytes: bytes, timestamp: str) -> str:
+    """HMAC-SHA256 signature over `timestamp.payload_bytes`, using SECRET_KEY.
+
+    Receivers verify with the same algorithm. Including the timestamp in
+    the signed material defeats replay attacks once the receiver also
+    checks that the timestamp is recent (±5 min is typical).
+    """
+    signed = timestamp.encode() + b"." + payload_bytes
+    return hmac.new(settings.secret_key.encode(), signed, hashlib.sha256).hexdigest()
 
 
 async def fire_webhook(
@@ -24,12 +40,26 @@ async def fire_webhook(
 ) -> None:
     """POST to a webhook URL with exponential backoff retry (1s, 2s, 4s).
 
+    Attaches headers so receivers can verify provenance:
+      X-AgentGate-Timestamp: unix seconds of signing
+      X-AgentGate-Signature: hex HMAC-SHA256 of "{ts}.{raw_body}"
+
     Treats any 5xx as retryable and anything <500 as terminal success.
     """
+    body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    timestamp = str(int(time.time()))
+    signature = _sign_webhook(body, timestamp)
+    headers = {
+        "Content-Type": "application/json",
+        "X-AgentGate-Timestamp": timestamp,
+        "X-AgentGate-Signature": signature,
+        "User-Agent": "AgentGate-Webhook/1",
+    }
+
     for attempt in range(max_retries):
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(webhook_url, json=payload)
+                resp = await client.post(webhook_url, content=body, headers=headers)
             if resp.status_code < 500:
                 logger.info("Webhook sent to %s (attempt %d)", webhook_url, attempt + 1)
                 return

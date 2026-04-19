@@ -60,12 +60,26 @@ async def signup(data: SignupRequest, request: Request):
         await session.commit()
         await session.refresh(org)
 
+    # Kick off email verification. If Resend isn't configured the function
+    # no-ops and logs a warning; signup still succeeds.
+    if org.email:
+        from agentgate.server.auth_routes import issue_verification_token
+
+        try:
+            await issue_verification_token(str(org.id), org.email)
+        except Exception:
+            import logging
+            logging.getLogger("agentgate.signup").exception(
+                "Verification email failed to send for org %s", org.id,
+            )
+
     return {
         "message": "Organization created successfully",
         "org_id": str(org.id),
         "org_name": org.name,
         "api_key": api_key,
         "tier": org.tier,
+        "email_verification_required": bool(org.email),
         "note": "Save your API key — it won't be shown again.",
     }
 

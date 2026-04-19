@@ -133,6 +133,10 @@
             <input type="password" id="password" placeholder="Your password" autocomplete="current-password">
         </div>
 
+        <p style="text-align:right;margin:-8px 0 16px;font-size:13px">
+            <a href="/forgot-password" style="color:var(--text-muted)">Forgot password?</a>
+        </p>
+
         <button class="btn" id="loginBtn" onclick="doLogin()">Sign In</button>
 
         <div style="display:flex;align-items:center;gap:12px;margin:24px 0 16px">
@@ -169,6 +173,9 @@
             token_failed: 'Could not complete authentication. Please try again.',
             oauth_failed: 'OAuth provider error. Please try again.',
             no_email: 'No email found on your account. Please use email/password signup.',
+            missing_token: 'That link is missing its token. Check your email and click the full link.',
+            invalid_or_expired_token: 'That verification link is invalid or has expired.',
+            org_missing: 'That account no longer exists.',
         };
         errEl.textContent = msgs[params.get('error')] || 'Authentication failed.';
         errEl.style.display = 'block';

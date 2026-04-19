@@ -39,16 +39,39 @@ def _agent_image_name(agent_id: str) -> str:
     return f"agentgate-agent-{agent_id[:12]}:latest"
 
 
+MAX_EXTRACTED_BYTES = 500 * 1024 * 1024  # 500 MB total extracted size
+MAX_ENTRIES = 10_000  # cap file count to resist many-small-files bombs
+
+
 def save_agent_files(agent_id: str, tar_bytes: bytes) -> Path:
-    """Extract uploaded tar into the deploy directory. Returns the agent dir."""
+    """Extract uploaded tar into the deploy directory. Returns the agent dir.
+
+    Hardened against:
+    - path traversal (absolute paths, `..` segments)
+    - tar bombs (reject if extracted size exceeds MAX_EXTRACTED_BYTES)
+    - entry-count bombs (100k tiny files) via MAX_ENTRIES
+    - symlink escapes (filter="data" in extractall plus explicit refuse
+      of symlink/hardlink members)
+    """
     deploy_dir = Path(settings.deploy_dir) / agent_id
     deploy_dir.mkdir(parents=True, exist_ok=True)
 
     with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:gz") as tf:
-        # Security: prevent path traversal
-        for member in tf.getmembers():
+        members = tf.getmembers()
+        if len(members) > MAX_ENTRIES:
+            raise ValueError(f"Too many files in archive (>{MAX_ENTRIES})")
+
+        total = 0
+        for member in members:
             if member.name.startswith("/") or ".." in member.name:
                 raise ValueError(f"Unsafe path in tar: {member.name}")
+            if member.issym() or member.islnk():
+                raise ValueError(f"Symlinks not allowed: {member.name}")
+            total += member.size
+            if total > MAX_EXTRACTED_BYTES:
+                raise ValueError(
+                    f"Archive extracts to more than {MAX_EXTRACTED_BYTES} bytes"
+                )
         tf.extractall(deploy_dir, filter="data")
 
     return deploy_dir

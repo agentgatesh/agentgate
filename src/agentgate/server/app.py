@@ -63,7 +63,7 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
     """
 
     LEGACY_PREFIXES = ("/agents", "/orgs", "/chains", "/ucp", "/deploy")
-    SUNSET = "Sat, 31 Jan 2026 23:59:59 GMT"
+    SUNSET = "Tue, 30 Jun 2026 23:59:59 GMT"
 
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -79,7 +79,11 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     import asyncio
 
+    from agentgate.core.config import enforce_secrets_or_exit
     from agentgate.server.plugins import plugin_manager
+
+    # Refuse to boot in prod with `changeme` defaults.
+    enforce_secrets_or_exit()
 
     # Load plugins from config file if configured
     if settings.plugin_config:
@@ -111,13 +115,15 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Mark legacy non-/v1 API responses as deprecated (no redirect, header-only)
 app.add_middleware(DeprecationHeaderMiddleware)
 
-# CORS — allow SDK clients and third-party integrations
+# CORS — allow SDK clients and third-party integrations.
+# Explicit allowlists: wildcards combined with allow_credentials=True
+# open the door to side-channel CSRF even with SameSite cookies.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.base_url],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "X-Requested-With"],
 )
 
 # Mount routers at both / (backward compat) and /v1/ (versioned API)
@@ -196,6 +202,8 @@ async def sitemap_xml():
 _PAGES = [
     "index", "marketplace", "signup", "login", "pricing",
     "ratelimits", "terms", "privacy", "refund", "guide", "admin",
+    ("forgot-password", "forgot_password.html"),
+    ("reset-password", "reset_password.html"),
 ]
 
 
@@ -209,9 +217,15 @@ def _page_route(template_name: str, path: str):
 
 # Landing
 _page_route("index.html", "/")
-# Top-level pages
+# Top-level pages — each entry is either a stem (e.g. "marketplace",
+# served from marketplace.html at /marketplace) or a (path, template)
+# tuple when the URL differs from the template filename.
 for _p in _PAGES[1:]:  # skip "index" already mounted at "/"
-    _page_route(f"{_p}.html", f"/{_p}")
+    if isinstance(_p, tuple):
+        _path, _tmpl = _p
+        _page_route(_tmpl, f"/{_path}")
+    else:
+        _page_route(f"{_p}.html", f"/{_p}")
 
 
 @app.get("/health")

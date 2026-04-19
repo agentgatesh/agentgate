@@ -118,6 +118,7 @@ def _make_fake_org(**kwargs):
 def _mock_db_with_org(org):
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = org
+    mock_result.scalar.return_value = 0  # used by session-revocation count query
     mock_session = AsyncMock()
     mock_session.add = MagicMock()
     mock_session.execute = AsyncMock(return_value=mock_result)
