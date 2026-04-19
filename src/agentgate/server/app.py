@@ -208,7 +208,9 @@ _PAGES = [
 
 
 def _page_route(template_name: str, path: str):
-    @app.get(path, response_class=HTMLResponse)
+    # HEAD in addition to GET so external uptime monitors (UptimeRobot
+    # and friends default to HEAD) don't see every landing as 405-down.
+    @app.api_route(path, methods=["GET", "HEAD"], response_class=HTMLResponse)
     async def _page(request: Request):
         return templates.TemplateResponse(request, template_name)
     _page.__name__ = f"page_{template_name}"
@@ -228,8 +230,8 @@ for _p in _PAGES[1:]:  # skip "index" already mounted at "/"
         _page_route(f"{_p}.html", f"/{_p}")
 
 
-@app.get("/health")
-@app.get("/v1/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
+@app.api_route("/v1/health", methods=["GET", "HEAD"])
 async def health():
     return {"status": "ok", "version": __version__}
 
