@@ -1867,7 +1867,7 @@ def test_marketplace_html_exists():
 
     html = (
         Path(__file__).parent.parent
-        / "src/agentgate/server/static/marketplace.html"
+        / "src/agentgate/server/templates/marketplace.html"
     )
     assert html.exists()
 
@@ -2170,7 +2170,7 @@ def test_ratelimits_html_exists():
 
     html = (
         Path(__file__).parent.parent
-        / "src/agentgate/server/static/ratelimits.html"
+        / "src/agentgate/server/templates/ratelimits.html"
     )
     assert html.exists()
 

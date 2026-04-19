@@ -1,0 +1,21 @@
+<footer>
+    <div class="container">
+        <p>
+            AgentGate &mdash; Open source, built for the agent economy.
+            &nbsp;&middot;&nbsp;
+            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/guide">Docs</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/pricing">Pricing</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/terms">Terms</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/privacy">Privacy</a>
+            &nbsp;&middot;&nbsp;
+            <a href="/refund">Refund Policy</a>
+        </p>
+    </div>
+</footer>
+
+<script>fetch("/auth/me").then(r=>{if(r.ok){const e=document.getElementById("authLink");if(e){e.href="/account";e.textContent="Account"}}}).catch(()=>{});</script>

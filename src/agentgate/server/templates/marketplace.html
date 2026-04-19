@@ -363,19 +363,7 @@
     </style>
 </head>
 <body>
-<nav>
-    <div class="container">
-        <a href="/" class="logo">Agent<span>Gate</span></a>
-        <div class="links">
-            <a href="/marketplace">Marketplace</a>
-            <a href="/pricing">Pricing</a>
-            <a href="/guide">Docs</a>
-            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
-            <a id="authLink" href="/signup" style="color:var(--accent);font-weight:600;">Sign Up</a>
-        </div>
-    </div>
-</nav>
-
+{% include "partials/_nav.html" %}
     <div class="container" style="padding-top:32px;padding-bottom:32px;">
         <div class="hero">
             <h1>Agent Marketplace</h1>
@@ -776,27 +764,7 @@
             }
         }
     </script>
+{% include "partials/_footer.html" %}
 
-<footer>
-    <div class="container">
-        <p>
-            AgentGate &mdash; Open source, built for the agent economy.
-            &nbsp;&middot;&nbsp;
-            <a href="https://github.com/agentgatesh/agentgate">GitHub</a>
-            &nbsp;&middot;&nbsp;
-            <a href="/guide">Docs</a>
-            &nbsp;&middot;&nbsp;
-            <a href="/pricing">Pricing</a>
-            &nbsp;&middot;&nbsp;
-            <a href="/terms">Terms</a>
-            &nbsp;&middot;&nbsp;
-            <a href="/privacy">Privacy</a>
-            &nbsp;&middot;&nbsp;
-            <a href="/refund">Refund Policy</a>
-        </p>
-    </div>
-</footer>
-
-<script>fetch("/auth/me").then(r=>{if(r.ok){const e=document.getElementById("authLink");if(e){e.href="/account";e.textContent="Account"}}}).catch(()=>{});</script>
 </body>
 </html>

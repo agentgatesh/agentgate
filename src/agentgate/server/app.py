@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -30,6 +31,8 @@ from agentgate.server.stripe_routes import router as stripe_router
 from agentgate.server.ucp_routes import router as ucp_router
 
 STATIC_DIR = Path(__file__).parent / "static"
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 # ---------------------------------------------------------------------------
@@ -117,8 +120,9 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     if exc.status_code == 404:
         accept = request.headers.get("accept", "")
         if "text/html" in accept:
-            html = (STATIC_DIR / "404.html").read_text()
-            return HTMLResponse(content=html, status_code=404)
+            return templates.TemplateResponse(
+                request, "404.html", status_code=404,
+            )
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
@@ -165,9 +169,25 @@ async def sitemap_xml():
     )
 
 
-@app.get("/", response_class=HTMLResponse)
-async def landing_page():
-    return (STATIC_DIR / "index.html").read_text()
+_PAGES = [
+    "index", "marketplace", "signup", "login", "pricing",
+    "ratelimits", "terms", "privacy", "refund", "guide", "admin",
+]
+
+
+def _page_route(template_name: str, path: str):
+    @app.get(path, response_class=HTMLResponse)
+    async def _page(request: Request):
+        return templates.TemplateResponse(request, template_name)
+    _page.__name__ = f"page_{template_name}"
+    return _page
+
+
+# Landing
+_page_route("index.html", "/")
+# Top-level pages
+for _p in _PAGES[1:]:  # skip "index" already mounted at "/"
+    _page_route(f"{_p}.html", f"/{_p}")
 
 
 @app.get("/health")
@@ -181,34 +201,9 @@ async def dashboard():
     return RedirectResponse("/account", status_code=302)
 
 
-@app.get("/admin", response_class=HTMLResponse)
-async def admin_page():
-    return (STATIC_DIR / "admin.html").read_text()
-
-
-@app.get("/guide", response_class=HTMLResponse)
-async def guide_page():
-    return (STATIC_DIR / "guide.html").read_text()
-
-
-@app.get("/marketplace", response_class=HTMLResponse)
-async def marketplace_page():
-    return (STATIC_DIR / "marketplace.html").read_text()
-
-
-@app.get("/signup", response_class=HTMLResponse)
-async def signup_page():
-    return (STATIC_DIR / "signup.html").read_text()
-
-
 @app.get("/billing")
 async def billing_page():
     return RedirectResponse("/account", status_code=302)
-
-
-@app.get("/login", response_class=HTMLResponse)
-async def login_page():
-    return (STATIC_DIR / "login.html").read_text()
 
 
 @app.get("/account", response_class=HTMLResponse)
@@ -218,32 +213,7 @@ async def account_page(request: Request):
     user = await get_current_user(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
-    return (STATIC_DIR / "account.html").read_text()
-
-
-@app.get("/pricing", response_class=HTMLResponse)
-async def pricing_page():
-    return (STATIC_DIR / "pricing.html").read_text()
-
-
-@app.get("/ratelimits", response_class=HTMLResponse)
-async def ratelimits_page():
-    return (STATIC_DIR / "ratelimits.html").read_text()
-
-
-@app.get("/terms", response_class=HTMLResponse)
-async def terms_page():
-    return (STATIC_DIR / "terms.html").read_text()
-
-
-@app.get("/privacy", response_class=HTMLResponse)
-async def privacy_page():
-    return (STATIC_DIR / "privacy.html").read_text()
-
-
-@app.get("/refund", response_class=HTMLResponse)
-async def refund_page():
-    return (STATIC_DIR / "refund.html").read_text()
+    return templates.TemplateResponse(request, "account.html")
 
 
 @app.get("/health/agents")
