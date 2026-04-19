@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from agentgate.server.app import app
@@ -160,3 +161,55 @@ def test_signup_rate_limit():
 
         response = client.post("/orgs/signup", json={"name": "test", "email": "t@x.com"})
         assert response.status_code == 429
+
+
+# ---------------------------------------------------------------------------
+# Disposable-email block
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_disposable_list_loaded():
+    """The service loads either the bundled list or the hardcoded fallback."""
+    from agentgate.server.disposable import list_size
+
+    assert list_size() > 0
+
+
+@pytest.mark.asyncio
+async def test_known_disposable_domain_is_blocked():
+    """mailinator.com is a canonical throwaway and must be flagged."""
+    from agentgate.server.disposable import is_disposable
+
+    assert await is_disposable("attacker@mailinator.com") is True
+
+
+@pytest.mark.asyncio
+async def test_real_domain_is_not_blocked():
+    """A normal mainstream domain should pass."""
+    from agentgate.server.disposable import is_disposable
+
+    assert await is_disposable("user@gmail.com") is False
+
+
+@pytest.mark.asyncio
+async def test_empty_email_is_not_blocked():
+    """Empty / malformed input must short-circuit to False (fail open)."""
+    from agentgate.server.disposable import is_disposable
+
+    assert await is_disposable("") is False
+    assert await is_disposable("no-at-sign") is False
+
+
+def test_signup_rejects_disposable_generic_message():
+    """POST /orgs/signup with a throwaway domain returns 400 'Invalid email'."""
+    response = client.post(
+        "/orgs/signup",
+        json={
+            "name": "test-throwaway-" + str(hash("nonce"))[:6],
+            "email": "attacker@mailinator.com",
+            "password": "strong-password-1",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid email"

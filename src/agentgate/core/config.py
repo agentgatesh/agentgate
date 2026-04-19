@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     deployer_secret: str = ""
     resend_api_key: str = ""
     email_from: str = "AgentGate <noreply@agentgate.sh>"
+    rapidapi_key: str = ""
+    disposable_list_path: str = "/app/data/disposable-domains.txt"
 
 
 settings = Settings()

@@ -263,6 +263,9 @@
             <label for="email">Email</label>
             <input type="email" id="email" placeholder="you@example.com" maxlength="255" autocomplete="email">
             <div class="hint">For account recovery and important updates only.</div>
+            <div class="hint" id="emailSuggestion" style="display:none;color:#60a5fa;margin-top:6px">
+                Did you mean <button type="button" id="emailSuggestionApply" style="background:none;border:none;color:#3b82f6;text-decoration:underline;cursor:pointer;padding:0;font:inherit"></button>?
+            </div>
         </div>
 
         <div class="field">
@@ -409,6 +412,42 @@
             doSignup();
         }
     });
+</script>
+
+<!-- mailcheck: suggest corrections for common typos (gmial.com -> gmail.com). -->
+<script src="https://cdn.jsdelivr.net/npm/mailcheck@1.1.2/src/mailcheck.min.js"></script>
+<script>
+(function () {
+    const emailInput = document.getElementById('email');
+    const suggestion = document.getElementById('emailSuggestion');
+    const applyBtn = document.getElementById('emailSuggestionApply');
+    if (!emailInput || !window.Mailcheck) return;
+
+    function clearSuggestion() {
+        suggestion.style.display = 'none';
+        applyBtn.dataset.full = '';
+    }
+
+    emailInput.addEventListener('blur', function () {
+        if (!emailInput.value) return clearSuggestion();
+        Mailcheck.run({
+            email: emailInput.value,
+            suggested: (s) => {
+                applyBtn.textContent = s.full;
+                applyBtn.dataset.full = s.full;
+                suggestion.style.display = 'block';
+            },
+            empty: clearSuggestion,
+        });
+    });
+    emailInput.addEventListener('input', clearSuggestion);
+    applyBtn.addEventListener('click', function () {
+        if (applyBtn.dataset.full) {
+            emailInput.value = applyBtn.dataset.full;
+            clearSuggestion();
+        }
+    });
+})();
 </script>
 
 </body>

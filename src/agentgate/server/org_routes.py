@@ -29,11 +29,19 @@ async def signup(data: SignupRequest, request: Request):
     """
     import secrets
 
+    from agentgate.server.disposable import is_disposable
     from agentgate.server.ratelimit import auth_limiter
 
     client_ip = request.client.host if request.client else "unknown"
     if not auth_limiter.allow(f"signup:{client_ip}"):
         raise HTTPException(status_code=429, detail="Too many signup attempts. Try again later.")
+
+    # Normalised email, checked against the disposable-domain cascade.
+    # Generic "Invalid email" on purpose — we don't reveal which specific
+    # rule fired so attackers can't iterate to find a bypass.
+    email_normalised = data.email.strip().lower()
+    if await is_disposable(email_normalised):
+        raise HTTPException(status_code=400, detail="Invalid email")
 
     async with async_session() as session:
         existing = await session.execute(
@@ -51,7 +59,7 @@ async def signup(data: SignupRequest, request: Request):
 
         org = Organization(
             name=data.name,
-            email=data.email,
+            email=email_normalised,
             password_hash=password_hash,
             api_key_hash=hash_api_key(api_key),
             tier="free",

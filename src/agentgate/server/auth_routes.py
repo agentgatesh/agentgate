@@ -552,6 +552,7 @@ async def verify_email(request: Request):
 @router.post("/forgot-password")
 async def forgot_password(request: Request):
     """Send a password reset email. Always 200 to avoid email enumeration."""
+    from agentgate.server.disposable import is_disposable
     from agentgate.server.ratelimit import auth_limiter
 
     client_ip = request.client.host if request.client else "unknown"
@@ -563,7 +564,10 @@ async def forgot_password(request: Request):
     generic_response = {
         "message": "If an account exists for that email, a reset link is on its way.",
     }
-    if not email:
+    # Short-circuit on empty or disposable email. Same generic response
+    # so the caller can't distinguish "valid + no account" from
+    # "disposable domain rejected".
+    if not email or await is_disposable(email):
         return generic_response
 
     async with async_session() as session:
